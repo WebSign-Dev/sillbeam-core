@@ -109,7 +109,12 @@ final class CoreDataAssembler
                 $fingerprint = ArchitectureFingerprint::hash($status, $modules, $projects, $references);
             }
         }
-        $export = !$complete ? 'unavailable' : (array_all($completeness, static fn (string $domain): bool => 'complete' === $domain) ? 'complete' : 'partial');
+        $hasEvidence = array_any($completeness, static fn (string $domain): bool => 'complete' === $domain || 'partial' === $domain);
+        $export = match (true) {
+            !$hasEvidence => 'unavailable',
+            $complete && array_all($completeness, static fn (string $domain): bool => 'complete' === $domain) => 'complete',
+            default => 'partial',
+        };
 
         return new CoreDataDocument(
             $this->request,

@@ -74,13 +74,16 @@ final class SourceInspector
             $inventory = $this->inventory;
             $iterator = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(
                 new \RecursiveDirectoryIterator($root->path, \FilesystemIterator::SKIP_DOTS),
-                static function (\SplFileInfo $file) use ($options, &$pruned, $inventory): bool {
+                function (\SplFileInfo $file) use ($options, &$pruned, $inventory): bool {
                     $path = FilesystemPath::normalize($file->getPathname());
                     if (!$options->excluded($path)) {
                         if (null !== $inventory && $file->isDir() && !$file->isLink()) {
                             $inventory->directory($path);
 
                             return null !== $inventory->directories[$path];
+                        }
+                        if ($this->limitParseFailuresToDiscoveryRoots && $file->isDir() && !$file->isReadable() && !$this->requiresSource($options, $path)) {
+                            return false;
                         }
 
                         return true;

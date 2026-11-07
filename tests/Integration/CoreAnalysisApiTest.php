@@ -5,7 +5,12 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use Sillbeam\Core\Api\CoreDataJsonSerializer;
+use Sillbeam\Core\Api\CoreDataProvider;
+use Sillbeam\Core\Api\CoreDataRequest;
 use Sillbeam\Core\Console\Application;
+use Sillbeam\Core\Console\KernelArchitectureReporter;
+use Sillbeam\Core\I18n\CoreTranslator;
 use Sillbeam\Core\Tests\Support\SourceWorkspace;
 use Sillbeam\Core\Tests\Support\TestApplicationKernel;
 use Symfony\Component\Console\Tester\ApplicationTester;
@@ -85,6 +90,59 @@ final class CoreAnalysisApiTest extends TestCase
         }
     }
 
+    public function testUnreadableOutsideDirectoryDoesNotBlockLiveOrBecomeAFinding(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $source->php('src/Module/A/AModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a")] final class AModule {}');
+            $source->write('src/Outside/Hidden.php', '<?php class Hidden {}');
+            chmod($source->directory.'/src/Outside', 0000);
+            if (is_readable($source->directory.'/src/Outside')) {
+                self::markTestSkipped('The process can read permission-restricted directories.');
+            }
+            [$liveExit, $live] = $this->runCommand($source, ['command' => 'sillbeam:api', '--profile' => 'live']);
+            self::assertSame(0, $liveExit);
+            self::assertSame([], $live['diagnostics']['findings']);
+            [$analysisExit, $analysis] = $this->snapshot($source);
+            self::assertSame(3, $analysisExit);
+            self::assertSame('valid', $analysis['analysis']['status']);
+            self::assertSame('partial', $analysis['completeness']['source_inventory']);
+            self::assertContains('inventory.read', array_column($analysis['errors'], 'code'));
+        } finally {
+            chmod($source->directory.'/src/Outside', 0700);
+            $source->remove();
+        }
+    }
+
+    public function testMissingGermanResourceIsReportedInLiveAndAnalysis(): void
+    {
+        $source = new SourceWorkspace();
+        $catalogs = new \ReflectionProperty(CoreTranslator::class, 'loaded');
+        $previous = $catalogs->getValue();
+        try {
+            $translator = new CoreTranslator('de');
+            $translator->text('finding.source.parse', ['path' => 'test', 'error' => 'test']);
+            $loaded = $catalogs->getValue();
+            unset($loaded['de']['finding.source.parse']);
+            $catalogs->setValue(null, $loaded);
+            $source->write('src/Module/A/Broken.php', '<?php class {');
+            foreach (['live', 'analysis'] as $profile) {
+                $arguments = ['command' => 'sillbeam:api', '--profile' => $profile];
+                if ('live' === $profile) {
+                    $arguments['--locale'] = 'de';
+                }
+                [$exit, $data] = $this->runCommand($source, $arguments);
+                self::assertSame(2, $exit);
+                $finding = $data['diagnostics']['findings'][0];
+                self::assertSame($finding['message'], $finding['translations']['de']['message']);
+                self::assertContains(['resource_key' => 'finding.source.parse', 'locale' => 'de', 'source_locale' => 'en'], $data['i18n']['fallbacks']);
+            }
+        } finally {
+            $catalogs->setValue(null, $previous);
+            $source->remove();
+        }
+    }
+
     public function testUnknownDeclaredTargetsHaveNodesAndNoInventedReferences(): void
     {
         $source = new SourceWorkspace();
@@ -100,6 +158,29 @@ final class CoreAnalysisApiTest extends TestCase
             self::assertTrue($edge['declared']);
             self::assertFalse($edge['observed']);
             self::assertSame([], $edge['reference_ids']);
+        } finally {
+            $source->remove();
+        }
+    }
+
+    public function testPublicPhpProviderAndSerializerMatchTheCliProjection(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $source->php('src/Module/A/AModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a", description: "Eigener Text")] final class AModule {}');
+            [$exit, $cli] = $this->snapshot($source);
+            self::assertSame(0, $exit);
+            $kernel = new TestApplicationKernel($source);
+            $configuration = (new KernelArchitectureReporter())->configuration($kernel);
+            $provider = new CoreDataProvider($configuration, environment: $kernel->getEnvironment(), kernelFile: (new \ReflectionClass($kernel))->getFileName() ?: null);
+            $document = $provider->collect(CoreDataRequest::fromProfile('analysis'));
+            $php = json_decode((new CoreDataJsonSerializer())->serialize($document), true, flags: \JSON_THROW_ON_ERROR);
+            self::assertSame('Eigener Text', $php['architecture']['modules'][0]['description']);
+            self::assertNotSame($cli['metadata']['analysis_run_id'], $php['metadata']['analysis_run_id']);
+            foreach (['analysis_run_id', 'analyzed_at', 'duration_ms'] as $key) {
+                unset($cli['metadata'][$key], $php['metadata'][$key]);
+            }
+            self::assertSame($cli, $php);
         } finally {
             $source->remove();
         }
@@ -179,6 +260,7 @@ final class CoreAnalysisApiTest extends TestCase
             self::assertGreaterThanOrEqual(2, \count(array_filter($ids, static fn (string $id): bool => 'configuration.files' === $id)));
             self::assertSame(array_keys($checks), array_column($checks, 'index'));
             self::assertSame('complete', $data['completeness']['doctor']);
+            self::assertSame('partial', $data['export']['status']);
             self::assertSame(2, $data['doctor']['exit_code']);
         } finally {
             $source->remove();

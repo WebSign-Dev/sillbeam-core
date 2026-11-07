@@ -38,6 +38,13 @@ final readonly class SourceInventory
                 $directories[$path] = true;
             }
         }
+        $moduleDirectories = $projectDirectories = $ownership = [];
+        foreach ($discovery->modules ?? [] as $module) {
+            $moduleDirectories[$module->directory] = $module;
+        }
+        foreach ($discovery->projects ?? [] as $project) {
+            $projectDirectories[$project->directory] = $project;
+        }
         foreach ($evidence->files as $absolute => $file) {
             $path = ($this->relative)($absolute);
             if (null === $path) {
@@ -47,8 +54,12 @@ final readonly class SourceInventory
             if (isset($files[$path])) {
                 continue;
             }
-            $module = $this->owner($absolute, $discovery->modules ?? []);
-            $project = $module->projectClass ?? $this->owner($absolute, $discovery->projects ?? [])?->class;
+            $directory = \dirname($absolute);
+            [$module, $project] = $ownership[$directory] ??= [
+                $this->owner($directory, $moduleDirectories),
+                $this->owner($directory, $projectDirectories),
+            ];
+            $projectClass = $module->projectClass ?? $project?->class;
             $extension = pathinfo($path, \PATHINFO_EXTENSION);
             $phpCount += (int) ('php' === strtolower($extension));
             $symbolCount += \count($file['symbols']);
@@ -56,8 +67,8 @@ final readonly class SourceInventory
             $files[$path] = new CoreDataObject([
                 'path' => $path, 'extension' => '' === $extension ? null : $extension,
                 'size_bytes' => $file['size'], 'content_hash' => null === $file['hash'] ? null : 'sha256:v1:'.$file['hash'],
-                'ownership' => null !== $module ? 'module' : (null !== $project ? 'project' : ($inside ? 'unknown' : 'application')),
-                'module_class' => $module?->class, 'project_class' => $project,
+                'ownership' => null !== $module ? 'module' : (null !== $projectClass ? 'project' : ($inside ? 'unknown' : 'application')),
+                'module_class' => $module?->class, 'project_class' => $projectClass,
                 'parse_status' => $file['status'],
                 'symbols' => array_map(static fn (array $symbol): CoreDataObject => new CoreDataObject($symbol), $file['symbols']),
             ]);
@@ -88,18 +99,20 @@ final readonly class SourceInventory
     /**
      * @template T of \Sillbeam\Core\Module\ModuleDefinition|\Sillbeam\Core\Project\ProjectDefinition
      *
-     * @param array<class-string, T> $catalog
+     * @param array<string, T> $directories
      *
      * @return T|null
      */
-    private function owner(string $path, array $catalog): ?object
+    private function owner(string $directory, array $directories): ?object
     {
-        foreach ($catalog as $definition) {
-            if (str_starts_with($path, FilesystemPath::directoryPrefix($definition->directory))) {
-                return $definition;
+        while (!isset($directories[$directory])) {
+            $parent = FilesystemPath::normalize(\dirname($directory));
+            if ($parent === $directory) {
+                return null;
             }
+            $directory = $parent;
         }
 
-        return null;
+        return $directories[$directory];
     }
 }

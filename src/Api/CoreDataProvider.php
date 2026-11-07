@@ -15,7 +15,7 @@ final readonly class CoreDataProvider implements CoreDataProviderInterface
 {
     /**
      * @param CoreDataConfiguration|\Closure(): CoreDataConfiguration $configuration
-     * @param string|\Closure(): string|null $projectDir
+     * @param string|\Closure(): string|null                          $projectDir
      */
     public function __construct(
         private CoreDataConfiguration|\Closure $configuration,
