@@ -23,6 +23,9 @@ final readonly class SourceInventory
     {
         $roots = $directories = $files = $excluded = $errors = [];
         $phpCount = $symbolCount = 0;
+        if (null === $options) {
+            $errors[] = ['code' => 'inventory.discovery', 'path' => null];
+        }
         $architectureRoots = [...($options->moduleRoots ?? []), ...($options->projectRoots ?? [])];
         foreach ($options?->roots() ?? [] as $root) {
             $path = ($this->relative)($root->path);

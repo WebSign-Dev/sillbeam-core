@@ -153,7 +153,7 @@ PHP);
             self::assertSame('', $stdout);
             self::assertSame('', $stderr);
         }
-        $this->source->write('src/Bad.php', '<?php class {');
+        $this->source->write('src/Module/Bad/Bad.php', '<?php class {');
         [$code, $stdout] = $this->runConsole(['sillbeam:architecture', '-q']);
         self::assertSame(2, $code);
         self::assertSame('', $stdout);

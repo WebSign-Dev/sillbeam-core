@@ -45,9 +45,9 @@ final class CoreDataCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption('profile', null, InputOption::VALUE_REQUIRED, 'Core Data profile.', 'live');
-        $this->addOption('locale', null, InputOption::VALUE_REQUIRED, 'Locale for Live output.');
-        $this->addOption('schema-version', null, InputOption::VALUE_REQUIRED, 'Core Data schema version.', '1');
+        $this->addOption('profile', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.profile'), 'live');
+        $this->addOption('locale', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.locale'));
+        $this->addOption('schema-version', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.version'), '1');
     }
 
     public function run(InputInterface $input, OutputInterface $output): int

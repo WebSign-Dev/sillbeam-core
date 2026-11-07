@@ -194,14 +194,43 @@ final class CoreAnalysisApiTest extends TestCase
             [$code, $first] = $this->snapshot($source);
             [, $second] = $this->snapshot($source);
             self::assertSame(0, $code);
-            self::assertSame(1, $first['metadata']['fingerprint_version']);
-            self::assertMatchesRegularExpression('/^sha256:v1:[0-9a-f]{64}$/', $first['metadata']['architecture_fingerprint']);
+            self::assertSame(2, $first['metadata']['fingerprint_version']);
+            self::assertSame(\Sillbeam\Core\Api\CoreCapabilitiesProvider::coreVersion(), $first['metadata']['core_version']);
+            self::assertMatchesRegularExpression('/^sha256:v2:[0-9a-f]{64}$/', $first['metadata']['architecture_fingerprint']);
             self::assertSame($first['metadata']['architecture_fingerprint'], $second['metadata']['architecture_fingerprint']);
             self::assertNotSame($first['metadata']['analysis_run_id'], $second['metadata']['analysis_run_id']);
             $source->write('config/packages/sillbeam.yaml', 'sillbeam: { modules: { a: { enabled: false } } }');
             [, $third] = $this->snapshot($source);
             self::assertNotSame($first['metadata']['architecture_fingerprint'], $third['metadata']['architecture_fingerprint']);
             self::assertFalse($third['architecture']['modules'][0]['enabled']);
+        } finally {
+            $source->remove();
+        }
+    }
+
+    public function testFingerprintDistinguishesFindingsButIgnoresLineShifts(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $source->php('src/Module/A/AModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a")] final class AModule {}');
+            $path = 'src/Module/A/Consumer.php';
+            $source->php($path, 'final class Consumer {}');
+            [, $valid] = $this->snapshot($source);
+            $source->php($path, 'final class Consumer { public MissingOne $value; }');
+            [, $first] = $this->snapshot($source);
+            $source->php($path, "\n\n".'final class Consumer { public MissingOne $value; }');
+            [, $shifted] = $this->snapshot($source);
+            $source->php($path, 'final class Consumer { public MissingTwo $value; }');
+            [, $second] = $this->snapshot($source);
+            $source->php($path, 'final class Consumer {}');
+            [, $restored] = $this->snapshot($source);
+            $hash = static fn (array $snapshot): string => $snapshot['metadata']['architecture_fingerprint'];
+            self::assertSame('code.unknown_class', $first['diagnostics']['findings'][0]['rule']);
+            self::assertSame('code.unknown_class', $second['diagnostics']['findings'][0]['rule']);
+            self::assertNotSame($hash($valid), $hash($first));
+            self::assertSame($hash($first), $hash($shifted));
+            self::assertNotSame($hash($first), $hash($second));
+            self::assertSame($hash($valid), $hash($restored));
         } finally {
             $source->remove();
         }
@@ -230,12 +259,14 @@ final class CoreAnalysisApiTest extends TestCase
         $source = new SourceWorkspace();
         try {
             $source->php('src/Module/A/AModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a", dependencies: [\Missing\Module::class])] final class AModule {}');
+            $source->php('src/Module/A/AModule.php', 'file_put_contents(__DIR__."/ran.txt", "ran"); #[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a", dependencies: [\Missing\Module::class])] final class AModule {}');
             $source->write('src/Module/A/Assets/logo.txt', 'example');
             $source->write('src/Excluded/Broken.php', '<?php class {');
             $source->write('config/packages/sillbeam.yaml', 'sillbeam: { discovery: { excludes: ["Excluded", "Excluded/**"] } }');
             [$exit, $inventory] = $this->runCommand($source, ['command' => 'sillbeam:inspect:sources', '--format' => 'json']);
             self::assertSame(0, $exit);
             self::assertArrayNotHasKey('analysis', $inventory);
+            self::assertFileDoesNotExist($source->directory.'/src/Module/A/ran.txt');
             $files = array_column($inventory['files'], null, 'path');
             self::assertSame('module', $files['src/Module/A/Assets/logo.txt']['ownership']);
             self::assertArrayNotHasKey('src/Excluded/Broken.php', $files);
@@ -243,6 +274,29 @@ final class CoreAnalysisApiTest extends TestCase
             self::assertSame(\count($files), $inventory['summary']['file_count']);
         } finally {
             $source->remove();
+        }
+    }
+
+    public function testInventoryDoesNotFollowSourceLinksOutsideAllowedRoots(): void
+    {
+        $source = new SourceWorkspace();
+        $external = new SourceWorkspace();
+        try {
+            $external->write('src/Secret.php', '<?php class {');
+            $source->write('src/Service/Local.php', '<?php class Local {}');
+            symlink($external->directory.'/src/Secret.php', $source->directory.'/src/Service/External.php');
+            symlink($source->directory.'/src/Service/Local.php', $source->directory.'/src/Service/Alias.php');
+            [$exit, $data] = $this->snapshot($source);
+            self::assertSame(3, $exit);
+            self::assertSame('valid', $data['analysis']['status']);
+            self::assertSame([], $data['diagnostics']['findings']);
+            self::assertSame(['src/Service/Alias.php', 'src/Service/External.php'], $data['source_inventory']['excluded_paths']);
+            self::assertSame(['src/Service/Local.php'], array_column($data['source_inventory']['files'], 'path'));
+            self::assertSame('inventory.link', $data['errors'][0]['code']);
+            self::assertSame('src/Service/External.php', $data['errors'][0]['path']);
+        } finally {
+            $source->remove();
+            $external->remove();
         }
     }
 

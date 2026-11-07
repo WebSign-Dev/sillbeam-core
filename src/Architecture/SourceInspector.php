@@ -23,7 +23,7 @@ final class SourceInspector
     /** @var array<string, list<string>> */
     private array $prunedPaths = [];
 
-    public function __construct(private readonly bool $limitParseFailuresToDiscoveryRoots = false, private readonly ?SourceInventoryEvidence $inventory = null, private readonly bool $inventoryOnly = false)
+    public function __construct(private readonly ?SourceInventoryEvidence $inventory = null, private readonly bool $inventoryOnly = false)
     {
     }
 
@@ -77,12 +77,28 @@ final class SourceInspector
                 function (\SplFileInfo $file) use ($options, &$pruned, $inventory): bool {
                     $path = FilesystemPath::normalize($file->getPathname());
                     if (!$options->excluded($path)) {
-                        if (null !== $inventory && $file->isDir() && !$file->isLink()) {
+                        // Directory and file aliases are not independent source identities.
+                        if ($file->isLink()) {
+                            $pruned[$path] = $path;
+                            if (null !== $inventory) {
+                                $target = realpath($path);
+                                if (false === $target || !array_any($options->roots(), static function (DiscoveryRoot $root) use ($target): bool {
+                                    $resolved = realpath($root->path);
+
+                                    return false !== $resolved && str_starts_with(FilesystemPath::normalize($target), FilesystemPath::directoryPrefix($resolved));
+                                })) {
+                                    $inventory->failures[$path] = 'inventory.link';
+                                }
+                            }
+
+                            return false;
+                        }
+                        if (null !== $inventory && $file->isDir()) {
                             $inventory->directory($path);
 
                             return null !== $inventory->directories[$path];
                         }
-                        if ($this->limitParseFailuresToDiscoveryRoots && $file->isDir() && !$file->isReadable() && !$this->requiresSource($options, $path)) {
+                        if ($file->isDir() && !$file->isReadable() && !$this->requiresSource($options, $path)) {
                             return false;
                         }
 
@@ -162,8 +178,7 @@ final class SourceInspector
 
     private function requiresSource(DiscoveryOptions $options, string $path): bool
     {
-        return !$this->limitParseFailuresToDiscoveryRoots
-            || array_any([...$options->moduleRoots, ...$options->projectRoots], static fn (DiscoveryRoot $root): bool => $root->contains($path));
+        return array_any([...$options->moduleRoots, ...$options->projectRoots], static fn (DiscoveryRoot $root): bool => $root->contains($path));
     }
 
     /** @return list<string> */
@@ -204,6 +219,9 @@ final class SourceInspector
      */
     public function directories(string $root, array $patterns, array $excludedRoots = [], ?DiscoveryOptions $options = null): array
     {
+        if ($this->inventoryOnly) {
+            return [];
+        }
         $root = FilesystemPath::normalize($root);
         $excludedRoots = array_map(FilesystemPath::normalize(...), $excludedRoots);
         if (!is_dir($root)) {
@@ -247,6 +265,11 @@ final class SourceInspector
      */
     public function metadata(string $class, string $file, string $attribute): object
     {
+        if ($this->inventoryOnly) {
+            // Ownership uses only verified descriptor classes and their directories.
+            // Do not evaluate attribute expressions or load the descriptor class.
+            return new $attribute(id: 'inventory');
+        }
         // Loading descriptors executes application code; its programming errors must propagate.
         $reflection = $this->reflection($class, $file);
         try {

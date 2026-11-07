@@ -20,6 +20,19 @@ use Sillbeam\Core\I18n\CoreTranslator;
 
 final class CoreDataFoundationTest extends TestCase
 {
+    public function testGraphAndReportCliRenderGermanResourceText(): void
+    {
+        $translator = new CoreTranslator('de');
+        $report = ArchitectureReport::fromAnalysis(new \Sillbeam\Core\Architecture\ArchitectureAnalysisResult());
+        $graph = new \Symfony\Component\Console\Tester\CommandTester(new \Sillbeam\Core\Architecture\Console\GraphCommand($report, $translator));
+        self::assertSame(3, $graph->execute(['--format' => 'bad'], ['capture_stderr_separately' => true]));
+        self::assertStringContainsString('Nicht unterstütztes --format', $graph->getErrorOutput());
+        $renderer = new \Sillbeam\Core\Architecture\Console\ReportRenderer($report, $translator);
+        $markdown = $renderer->markdown('development', new \DateTimeImmutable('2026-11-07T00:00:00Z'));
+        self::assertStringContainsString('# Sillbeam-Architekturbericht', $markdown);
+        self::assertStringContainsString('Keine Architekturbefunde.', $markdown);
+    }
+
     public function testDefaultAndAnalysisLocales(): void
     {
         self::assertSame('en', (new CoreDataRequest(CoreDataProfile::Live))->locale);
@@ -33,6 +46,7 @@ final class CoreDataFoundationTest extends TestCase
         $contents = file_get_contents(__DIR__.'/../../docs/reference/core-data/examples/capabilities.json');
         self::assertIsString($contents);
         $expected = json_decode($contents, true, flags: \JSON_THROW_ON_ERROR);
+        $expected['core_version'] = CoreCapabilitiesProvider::coreVersion();
         self::assertSame($expected, (new CoreCapabilitiesProvider())->capabilities()->jsonSerialize());
     }
 

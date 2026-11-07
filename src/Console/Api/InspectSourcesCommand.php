@@ -25,7 +25,7 @@ final class InspectSourcesCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption('format', null, InputOption::VALUE_REQUIRED, 'Output format (json).', 'json');
+        $this->addOption('format', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.inventory_format'), 'json');
     }
 
     public function run(InputInterface $input, OutputInterface $output): int

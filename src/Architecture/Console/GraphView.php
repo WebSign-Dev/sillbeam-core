@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Architecture\Console;
 
 use Sillbeam\Core\Architecture\ArchitectureReport;
+use Sillbeam\Core\I18n\CoreTranslator;
 
 /**
  * Presentation of existing report evidence shared by SVG and Mermaid.
@@ -25,7 +26,7 @@ final readonly class GraphView
     }
 
     /** @throws \InvalidArgumentException for missing or ambiguous selectors */
-    public static function fromReport(ArchitectureReport $report, ?string $module = null, ?string $project = null): self
+    public static function fromReport(ArchitectureReport $report, ?string $module = null, ?string $project = null, CoreTranslator $translator = new CoreTranslator()): self
     {
         $inspection = new ModuleInspection($report);
         $context = null === $project ? null : $inspection->selectProject($project);
@@ -37,12 +38,12 @@ final readonly class GraphView
         $projectMap = array_column($projects, null, 'class');
         $counts = array_count_values(array_map(static fn (array $item): string => strtolower($item['id']), $modules));
         $projectCounts = array_count_values(array_map(static fn (array $item): string => strtolower($item['id']), $projects));
-        $groups = ['shared_scope' => 'Shared modules'];
+        $groups = ['shared_scope' => $translator->text('cli.graph.label.shared')];
         $projectGroups = [];
         foreach ($projects as $index => $item) {
             $group = \sprintf('project_scope_%04d', $index + 1);
             $projectGroups[$item['class']] = $group;
-            $groups[$group] = 'Private modules | '.$item['id'].($projectCounts[strtolower($item['id'])] > 1 ? ' | '.$item['class'] : '').'; membership='.(null === $item['modules'] ? 'unknown' : 'validated');
+            $groups[$group] = $translator->text('cli.graph.label.groups', ['id' => $item['id'], 'class' => $projectCounts[strtolower($item['id'])] > 1 ? ' | '.$item['class'] : '', 'state' => null === $item['modules'] ? 'unknown' : 'validated']);
         }
         $groups['unknown_owner'] = 'Private modules | owner not in available Project catalog';
         $cycles = [];
@@ -72,7 +73,7 @@ final readonly class GraphView
                     $label .= ' | '.self::descriptorLabel($class, array_column($collisions, 'class'));
                 }
             }
-            $label .= "\nstate=".$state.(false === $item['enabled'] && 'disabled' !== $state ? '; disabled' : '').(isset($cycles[$class]) ? '; recorded cycle member' : '');
+            $label .= "\nstate=".$state.(false === $item['enabled'] && 'disabled' !== $state ? $translator->text('cli.graph.label.disabled') : '').(isset($cycles[$class]) ? $translator->text('cli.graph.label.cycle') : '');
             if ('shared' === $item['scope'] && null === $context && [] !== $projects) {
                 $memberships = [];
                 foreach ($projects as $owner) {
@@ -99,10 +100,10 @@ final readonly class GraphView
         $unresolved = array_diff(array_keys($missing), array_keys($nodes));
         sort($unresolved, \SORT_STRING);
         foreach ($unresolved as $index => $class) {
-            $nodes[$class] = ['id' => \sprintf('u%04d', $index + 1), 'label' => "unresolved module target\n".$class."\nstate=unknown", 'class' => $class,
+            $nodes[$class] = ['id' => \sprintf('u%04d', $index + 1), 'label' => $translator->text('cli.graph.label.unresolved_node', ['class' => $class]), 'class' => $class,
                 'group' => 'unresolved', 'state' => 'unknown', 'disabled' => false, 'cycle' => false, 'external' => null !== $context];
         }
-        $groups['unresolved'] = 'Unresolved targets';
+        $groups['unresolved'] = $translator->text('cli.graph.label.unresolved');
         $edges = array_values(array_filter($edges, static fn (array $edge): bool => null !== $focus
             ? $edge['source'] === $focus || $edge['target'] === $focus
             : (null === $context || ($eligible[$edge['source']] ?? false) || ($eligible[$edge['target']] ?? false))));
@@ -113,27 +114,27 @@ final readonly class GraphView
         $nodes = array_intersect_key($nodes, $visible);
         usort($edges, static fn (array $a, array $b): int => [$a['source'], $a['target'], $a['observed']] <=> [$b['source'], $b['target'], $b['observed']]);
         $complete = $report->data['complete'] && ($report->presentation['module_inspection']['references_complete'] ?? false);
-        $notes = ['Analysis: '.$report->data['status'].'; '.($report->data['valid'] ? 'catalog evidence; runtime activation only where known' : 'diagnostic evidence; NOT a validated runtime graph'),
-            $report->data['complete'] ? 'Analysis complete' : 'Analysis incomplete',
-            $complete ? 'Reference evidence complete' : 'Reference evidence incomplete; missing edges do not prove absence'];
+        $notes = [$translator->text('cli.graph.label.analysis', ['status' => $report->data['status'], 'evidence' => $translator->text($report->data['valid'] ? 'cli.graph.label.validated' : 'cli.graph.label.evidence')]),
+            $report->data['complete'] ? $translator->text('cli.graph.label.complete') : $translator->text('cli.graph.label.incomplete'),
+            $complete ? $translator->text('cli.graph.label.refs_complete') : $translator->text('cli.graph.label.refs_incomplete')];
         if (null !== $context) {
-            $notes[] = 'Project context: '.$context['id'].'; incident cross-boundary evidence retained';
+            $notes[] = $translator->text('cli.graph.label.project_context', ['id' => $context['id']]);
         }
         if (null !== $focus) {
-            $notes[] = 'Module: '.$focus.'; direct incoming/outgoing relationships only';
+            $notes[] = $translator->text('cli.graph.label.focus', ['class' => $focus]);
         }
         if ([] === $nodes) {
-            $notes[] = 'Module catalog unavailable or empty; no runtime membership inferred';
+            $notes[] = $translator->text('cli.graph.label.catalog_empty');
         }
         foreach ($projects as $item) {
             if ([] === array_filter($nodes, static fn (array $node): bool => $node['group'] === $projectGroups[$item['class']])) {
                 if (null === $context || $context['class'] === $item['class']) {
-                    $notes[] = 'Project: '.$item['id'].'; membership='.(null === $item['modules'] ? 'unknown' : 'validated').'; no private modules in view';
+                    $notes[] = $translator->text('cli.graph.label.membership', ['id' => $item['id'], 'state' => null === $item['modules'] ? 'unknown' : 'validated']);
                 }
             }
         }
-        $notes[] = 'Legend: arrow = depends on; dashed orange = observed undeclared';
-        $notes[] = 'Gray = disabled; dashed node = unknown; red border = recorded cycle member';
+        $notes[] = $translator->text('cli.graph.label.legend');
+        $notes[] = $translator->text('cli.graph.label.states');
         $findings = $report->data['findings'];
         usort($findings, static fn (array $a, array $b): int => [$a['rule'], $a['message']] <=> [$b['rule'], $b['message']]);
         foreach ($findings as $finding) {

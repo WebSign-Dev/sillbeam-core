@@ -3,6 +3,266 @@
 declare(strict_types=1);
 
 return [
+    'cli.make.error.name' => 'Der Name muss mit einem ASCII-Buchstaben beginnen und darf nur ASCII-Buchstaben und Ziffern enthalten.',
+    'cli.make.error.suffix' => 'Gib den Basisnamen ohne das Suffix {suffix} an.',
+    'cli.make.error.root' => 'Konfiguriere zum Erstellen genau ein Suchverzeichnis unter sillbeam.discovery.{type}.',
+    'cli.make.error.owner' => '„{owner}“ muss genau ein gefundenes Projekt bezeichnen. Erstelle oder konfiguriere es zuerst.',
+    'cli.make.error.unsafe' => 'Unsicherer Zielpfad: {path}',
+    'cli.make.error.excluded' => 'Der Zielpfad ist von der Suche ausgeschlossen: {path}',
+    'cli.make.error.exists' => 'Das Ziel ist bereits vorhanden: {path}',
+    'cli.make.error.module_overlap' => 'Das Ziel würde ein bestehendes Modul überlappen: {path}',
+    'cli.make.error.project_overlap' => 'Das Ziel würde ein bestehendes Projekt überlappen: {path}',
+    'cli.make.error.in_project' => 'Das Modulziel liegt in einem Projektverzeichnis. Verwende --project.',
+    'cli.make.error.directory' => 'Das Verzeichnis kann nicht erstellt werden: {path}',
+    'cli.make.error.create' => 'Der Deskriptor kann nicht exklusiv erstellt werden: {path}',
+    'cli.make.error.write' => 'Der Deskriptor kann nicht geschrieben werden: {path}',
+    'cli.make.error.descriptor' => 'Ungültiger Deskriptorname oder Namespace: {error}',
+    'cli.about.title' => 'Informationen',
+    'cli.about.application' => 'Anwendung',
+    'cli.about.environment' => 'Umgebung',
+    'cli.about.debug' => 'Debug',
+    'cli.about.php' => 'PHP',
+    'cli.about.symfony' => 'Symfony',
+    'cli.about.sillbeam' => 'Sillbeam',
+    'cli.about.modules' => 'Module',
+    'cli.about.modules_enabled' => 'Aktive Module',
+    'report.markdown.deps_title' => '#### Abhängigkeiten von {name}',
+    'report.markdown.host_label' => '- Konfigurierte Hosts: {hosts}',
+    'report.markdown.modules_label' => '- Deklarierte Module: {modules}',
+    'report.markdown.detail_title' => '#### {title} von {name}',
+    'report.markdown.module_title' => '**Modul: {name}**',
+    'report.markdown.project_title' => '**Projekt: {name}**',
+    'report.markdown.unresolved_title' => '**Nicht aufgelöstes Modul: {name}**',
+    'report.markdown.reference_title' => '**Referenzierte Klasse: {name}**',
+    'report.markdown.reference_evidence' => '- {class} — Fundstelle: {location}, Ziel: {target}',
+    'cli.inspect.scope_line' => 'Bereich: {scope}{owner}',
+    'cli.inspect.global_state' => 'Globale Aktivierung: {state}. Sie weicht vom ausgewählten Projekt ab.',
+    'cli.inspect.enabled_override' => 'Konfigurierter enabled-Wert: {value} (Eingabe, kein Aktivierungsbeleg)',
+    'cli.inspect.owner_class' => 'Klasse des zugehörigen Projekts: {class}',
+    'cli.inspect.inspection_project' => 'Geprüftes Projekt: {id}',
+    'cli.inspect.project_class' => 'Projektklasse: {class}',
+    'cli.inspect.project_state' => 'Projekt {id}: {state} — {class}',
+    'cli.inspect.reference_at' => '{class} in {file}:{line}',
+    'cli.inspect.context' => 'Kontext: {context}',
+    'cli.inspect.owner_suffix' => ' · Zugehöriges Projekt: {project}',
+    'cli.inspect.evidence.both' => 'Deklariert und beobachtet',
+    'cli.inspect.evidence.observed' => 'Beobachtet ohne Deklaration',
+    'cli.inspect.evidence.declared' => 'Nur deklariert',
+    'cli.inspect.evidence.unverified' => 'Deklariert, Beobachtung nicht verifiziert',
+    'cli.graph.label.shared' => 'Gemeinsam genutzte Module',
+    'cli.graph.label.unresolved' => 'Nicht aufgelöste Ziele',
+    'cli.graph.label.complete' => 'Analyse vollständig',
+    'cli.graph.label.incomplete' => 'Analyse unvollständig',
+    'cli.graph.label.refs_complete' => 'Referenzbelege vollständig',
+    'cli.graph.label.refs_incomplete' => 'Referenzbelege unvollständig. Fehlende Kanten beweisen keine Abwesenheit.',
+    'cli.graph.label.catalog_empty' => 'Der Modulkatalog ist leer oder nicht verfügbar. Die Laufzeitzugehörigkeit ist unbekannt.',
+    'cli.graph.label.legend' => 'Legende: Pfeil = Abhängigkeit, orange gestrichelt = beobachtet und nicht deklariert',
+    'cli.graph.label.states' => 'Grau = deaktiviert, gestrichelt = unbekannt, roter Rand = Zyklusbeteiligung',
+    'cli.graph.label.validated' => 'Katalogbelege, Laufzeitaktivierung soweit bekannt',
+    'cli.graph.label.evidence' => 'Diagnosebelege ohne validierten Laufzeitgraphen',
+    'cli.graph.label.disabled' => ', deaktiviert',
+    'cli.graph.label.cycle' => ', Zyklusbeteiligung',
+    'cli.graph.label.analysis' => 'Analyse: {status}, {evidence}',
+    'cli.graph.label.project_context' => 'Projektkontext: {id}. Belege zu Beziehungen über die Projektgrenze bleiben erhalten.',
+    'cli.graph.label.focus' => 'Modul: {class}, direkte ein- und ausgehende Beziehungen',
+    'cli.graph.label.membership' => 'Projekt: {id}, Mitgliedschaft={state}, keine privaten Module in der Ansicht',
+    'cli.graph.label.groups' => 'Private Module | {id}{class}, Mitgliedschaft={state}',
+    'cli.graph.label.unresolved_node' => 'Nicht aufgelöstes Zielmodul
+{class}
+Zustand=unknown',
+    'report.markdown.private' => 'Privat',
+    'report.markdown.shared' => 'Gemeinsam genutzt',
+    'report.markdown.unknown' => 'Unbekannt',
+    'report.markdown.active' => 'Aktiv',
+    'report.markdown.declared' => 'deklariert',
+    'report.markdown.hosts_count' => 'Hosts',
+    'report.markdown.hosts_title' => 'Hosts',
+    'report.markdown.modules_title' => 'Deklarierte Module',
+    'report.markdown.scope_label' => '- Bereich: {scope}',
+    'report.markdown.state_label' => '- Zustand: {state}',
+    'report.markdown.deps_label' => '- Abhängigkeiten: {dependencies}',
+    'report.markdown.owner_label' => '- Zugehöriges Projekt: {project}',
+    'report.markdown.module_class' => '- Klasse: {class}',
+    'report.markdown.module_descriptor' => '- Deskriptor: {path}',
+    'report.markdown.project_class' => '- Klasse: {class}',
+    'report.markdown.project_descriptor' => '- Deskriptor: {path}',
+    'report.markdown.reported_class' => '- Gemeldete Klasse: {class}',
+    'cli.inspect.declared' => 'DEKLARIERTE ABHÄNGIGKEITEN',
+    'cli.inspect.observed' => 'BEOBACHTETE ABHÄNGIGKEITEN',
+    'cli.inspect.incoming_declared' => 'EINGEHENDE DEKLARIERTE ABHÄNGIGKEITEN',
+    'cli.inspect.incoming_observed' => 'EINGEHENDE BEOBACHTETE REFERENZEN',
+    'cli.inspect.none' => 'Keine erfasst.',
+    'cli.inspect.none_verified' => 'Keine erfasst. Abwesenheit lässt sich nur bei vollständigen Belegen bestätigen.',
+    'cli.inspect.descriptor_class' => 'Deskriptorklasse',
+    'cli.inspect.descriptor_file' => 'Deskriptordatei',
+    'cli.inspect.scope' => 'Bereich',
+    'cli.inspect.owner' => 'Zugehöriges Projekt',
+    'cli.inspect.configuration_key' => 'Konfigurationsschlüssel',
+    'cli.inspect.override' => 'Überschreibung',
+    'cli.inspect.enabled' => 'Verfügbar',
+    'cli.inspect.active' => 'Aktiv',
+    'cli.inspect.state' => 'Zustand',
+    'cli.inspect.global_active' => 'Global aktiv',
+    'cli.inspect.activation_reasons' => 'Aktivierungsgründe',
+    'cli.inspect.none_shared' => 'keines (gemeinsam genutzt)',
+    'cli.inspect.none_recorded' => 'keine erfasst',
+    'cli.make.module_name' => 'Modulname.',
+    'cli.make.project' => 'Name, ID oder Deskriptorklasse eines vorhandenen Projekts.',
+    'cli.make.created' => 'Erstellt: {path}',
+    'cli.make.project_name' => 'Projektname.',
+    'cli.make.hosts' => 'Konfiguriere bei mehreren Projekten vor dem nächsten Anwendungsstart sillbeam.projects.<id>.hosts für jedes Projekt. Der Befehl hat keine Konfigurationsdateien erstellt.',
+    'cli.svg.path' => 'Gib einen nicht leeren SVG-Ausgabepfad ohne Steuerzeichen an.',
+    'cli.svg.directory' => 'SVG-Ausgabeverzeichnis kann nicht erstellt werden: {path}',
+    'cli.svg.writable' => 'Das übergeordnete SVG-Ausgabeverzeichnis muss beschreibbar sein: {path}',
+    'cli.svg.temporary' => 'Temporäre SVG-Ausgabe kann nicht erstellt werden.',
+    'cli.svg.write' => 'Die vollständige SVG-Ausgabe kann nicht geschrieben werden.',
+    'cli.svg.publish' => 'Die SVG-Datei kann nicht atomar bereitgestellt werden. Das Ziel wurde möglicherweise gleichzeitig erstellt. Verwende --force nur zum gezielten Ersetzen.',
+    'cli.svg.regular' => 'Das SVG-Ziel muss eine reguläre Datei sein: {path}',
+    'cli.svg.exists' => 'Das SVG-Ziel ist bereits vorhanden. Verwende --force zum gezielten Ersetzen: {path}',
+    'cli.inspect.ambiguous_module' => 'Mehrdeutiges Modul: {id}. Verwende --project für das zugehörige Projekt oder die genaue Deskriptorklasse. Kandidaten: {candidates}',
+    'cli.inspect.catalog_unknown' => 'Der Modulkatalog ist nicht verfügbar oder unvollständig. Ob „{id}“ in diesem Kontext existiert, lässt sich nicht bestimmen.',
+    'cli.inspect.module_unknown' => 'Unbekanntes Modul: {id}. Verwende eine Modul-ID oder Deskriptorklasse.',
+    'cli.inspect.project_module_unknown' => 'Unbekanntes Modul: {id} in Projekt {project}. Verwende eine Modul-ID oder Deskriptorklasse.',
+    'cli.inspect.project_unknown' => 'Unbekanntes Projekt: {id}. Verwende eine Projekt-ID oder Deskriptorklasse. Kandidaten: {candidates}',
+    'cli.inspect.project_ambiguous' => 'Mehrdeutiges Projekt: {id}. Verwende eine Projekt-ID oder Deskriptorklasse. Kandidaten: {candidates}',
+    'cli.inspect.argument' => 'Modul-ID oder voll qualifizierte Deskriptorklasse ohne Beachtung der Groß- und Kleinschreibung.',
+    'cli.inspect.project' => 'Projekt-ID oder Deskriptorklasse für private Zuordnung und Mitgliedschaft gemeinsam genutzter Module.',
+    'cli.inspect.invalid' => 'Gib eine Modul-ID oder Klasse an. Verwende bei --project eine Projekt-ID oder Klasse.',
+    'cli.inspect.heading' => 'Modulinspektion',
+    'cli.inspect.activation_unknown' => 'Die Aktivierung ist unbekannt. Es liegt kein validierter Graph vor.',
+    'cli.inspect.references_incomplete' => 'Die Referenzbelege sind unvollständig. Fehlende Beobachtungen beweisen keine Abwesenheit.',
+    'cli.inspect.catalog_incomplete' => 'Modulkatalog oder Analyse können unvollständig sein. Die Anzahlen beziehen sich auf verfügbare Belege.',
+    'cli.inspect.depends_on' => 'HÄNGT AB VON',
+    'cli.inspect.used_by' => 'VERWENDET VON',
+    'cli.inspect.issues' => 'ARCHITEKTURBEFUNDE',
+    'cli.inspect.blockers' => 'ANALYSEBLOCKER',
+    'cli.inspect.no_issues' => 'Die verfügbaren Belege enthalten keine zugehörigen Architekturbefunde.',
+    'cli.inspect.no_evidence' => 'Keine Einträge in den verfügbaren Belegen.',
+    'cli.inspect.technical' => 'TECHNISCHE DETAILS',
+    'cli.inspect.originals' => 'ORIGINALBEFUNDE',
+    'cli.inspect.no_originals' => 'Keine Befunde für diese Inspektion.',
+    'cli.inspect.help' => 'Untersucht ein Modul anhand des vorhandenen Architekturberichts.
+
+  php bin/console sillbeam:inspect:module Billing
+  php bin/console sillbeam:inspect:module billing --project=shop
+  php bin/console sillbeam:inspect:module \'App\\Module\\Billing\\BillingModule\' -v
+
+IDs und Klassen werden unabhängig von Groß- und Kleinschreibung verglichen.
+Mehrdeutige IDs zeigen alle Kandidaten. --project wählt den Projektkontext,
+auch für nicht zugewiesene gemeinsam genutzte Module. Bei verbleibender
+Mehrdeutigkeit verwende die genaue Deskriptorklasse.
+Die Ausgabe zeigt direkte Abhängigkeiten und deren Belege. Fehlende Beobachtungen
+beweisen keine Abwesenheit. -v ergänzt Fundstellen, Konfiguration, Aktivierungsbelege,
+Projektzustände und Originalbefunde. Aktivierung setzt einen validierten Graphen voraus.
+Exit 0: gültig. Exit 1: Verstöße. Exit 2: Analyse nicht verfügbar oder ungültige
+bzw. mehrdeutige Auswahl. Textausgabe ohne JSON-Modus. --quiet unterdrückt die Ausgabe.
+Der Core-Console-Adapter ermöglicht die Inspektion vor der Container-Kompilierung.',
+    'cli.inspect.module_label' => 'Modul: {module} — {state}',
+    'cli.inspect.project_context' => 'Projektkontext: {project}',
+    'cli.inspect.architecture' => 'Architektur: {status} (gesamte Analyse)',
+    'cli.inspect.relationships' => 'Bekannte direkte Beziehungen: {outgoing} Abhängigkeiten · {incoming} Verwendungen',
+    'cli.inspect.whole' => 'Gesamte Analyse: {status}. Das vollständige Ergebnis zeigt sillbeam:architecture --all.',
+    'report.markdown.diagnoses' => '## Diagnosen und Lösungsschritte',
+    'report.markdown.problem' => '**Problem**',
+    'report.markdown.technical' => '## Technische Belege',
+    'report.markdown.couplings' => '## Kopplungen an Anwendungscode (informativ)',
+    'report.markdown.couplings_scope' => 'Beobachtete Referenzen auf Anwendungscode außerhalb der Module. Sie zählen nicht als Architekturverstöße und ändern den Exit-Code nicht.',
+    'report.markdown.modules' => '### Module',
+    'report.markdown.projects' => '### Projekte',
+    'report.markdown.module_table' => '| Modul | Bereich | Zustand | Abhängigkeiten |',
+    'report.markdown.project_table' => '| Projekt | Konfigurierte Hosts | Deklarierte Module |',
+    'report.markdown.catalog_identity' => '### Katalogidentitäten',
+    'report.markdown.catalog_identity_info' => 'Diese Identitäten ordnen die Katalogeinträge ihren ursprünglichen Deskriptorklassen und Dateien zu.',
+    'report.markdown.no_evidence' => 'Keine weiteren technischen Belege.',
+    'report.markdown.complete' => 'Analyse vollständig: {complete}',
+    'report.markdown.counts' => 'Befunde: {findings} · Diagnosen: {diagnoses}',
+    'report.markdown.severity_counts' => 'Verstöße: {errors} · Blocker: {blockers}',
+    'report.markdown.catalog_counts' => 'Geprüfte Module: {modules} · Geprüfte Projekte: {projects}',
+    'report.markdown.yes' => 'ja',
+    'report.markdown.no' => 'nein',
+    'cli.api.profile' => 'Core-Datenprofil.',
+    'cli.api.locale' => 'Sprache für die Live-Ausgabe.',
+    'cli.api.version' => 'Schema-Version der Core-Daten.',
+    'cli.api.capabilities_format' => 'Ausgabeformat (json).',
+    'cli.api.inventory_format' => 'Ausgabeformat (json).',
+    'cli.graph.format' => 'Ausgabeformat: svg oder mermaid.',
+    'cli.graph.output' => 'SVG-Ausgabepfad (Standard: architecture.svg im aktuellen Arbeitsverzeichnis).',
+    'cli.graph.module' => 'Modul-ID oder Deskriptorklasse für direkte ein- und ausgehende Beziehungen.',
+    'cli.graph.project' => 'Projekt-ID oder Deskriptorklasse zur Auswahl des Projektkontexts und privater Module.',
+    'cli.graph.force' => 'Eine vorhandene reguläre SVG-Datei gezielt ersetzen.',
+    'cli.graph.help' => 'Zeigt Modulidentitäten und direkte Abhängigkeitsbelege aus dem Architekturbericht.
+
+  php bin/console sillbeam:graph
+  php bin/console sillbeam:graph --format=svg --output=architecture.svg --force
+  php bin/console sillbeam:graph --module=Billing --project=shop
+  php bin/console sillbeam:graph --format=mermaid > architecture.mmd
+
+Core erzeugt SVG direkt in PHP ohne zusätzliche Pakete. Fehlende Ausgabeverzeichnisse
+werden erstellt. Standard ist architecture.svg im aktuellen Arbeitsverzeichnis.
+Vorhandene Dateien benötigen --force. Verzeichnisse und symbolische Links sind
+keine Ausgabeziele. Führe erzwungene Exporte nacheinander aus, da sie gleichzeitig
+geänderte Ziele ersetzen können. --output und --force gelten nur für SVG.
+SVG-Erfolgsmeldungen nennen den vollständigen Pfad. --quiet unterdrückt die Meldung,
+die Datei wird geschrieben. Mermaid schreibt Rohtext auf STDOUT, bei --quiet entfällt
+die Ausgabe. Renderer-Fehler erscheinen auf STDERR.
+IDs und Klassen werden unabhängig von Groß- und Kleinschreibung verglichen.
+Bei Mehrdeutigkeit hilft --project oder die genaue Deskriptorklasse. --module
+zeigt direkte Beziehungen. --project begrenzt private Module und zeigt die
+Aktivierung im Projekt. Beziehungen über Grenzen bleiben sichtbar.
+Gemeinsam genutzte Module bleiben auch ohne Zuweisung sichtbar. Der Export führt
+keine zusätzliche Suche oder Analyse durch. Pfeile zeigen auf benötigte Module.
+Beobachtete, nicht deklarierte Kanten sind gestrichelt. Zyklen sowie deaktivierte
+und unbekannte Zustände bleiben sichtbar. Fehlende Belege beweisen keine Abwesenheit.
+Exit 0: gültig. Exit 1: Verstöße. Exit 2: Analyse nicht verfügbar.
+Exit 3: ungültiger Aufruf oder ungültige Auswahl. Exit 4: Renderer- oder Ausgabefehler.
+Der Core-Console-Adapter ermöglicht die Diagnose vor der Container-Kompilierung.',
+    'cli.graph.invalid_format' => 'Nicht unterstütztes --format. Verwende svg oder mermaid.',
+    'cli.graph.mermaid_options' => '--output und --force gelten nur für SVG. Leite die Mermaid-Ausgabe von STDOUT um.',
+    'cli.graph.invalid_option' => 'Gib für --{option} einen nicht leeren Wert ohne Steuerzeichen an.',
+    'cli.graph.written' => 'Architektur-SVG wurde nach {path} geschrieben',
+    'cli.report.couplings' => 'Anhang zu informativen Kopplungen an Anwendungscode aufnehmen.',
+    'cli.report.output' => 'Berichtspfad, absolut oder relativ zum Projektverzeichnis.',
+    'cli.report.help' => 'Schreibt einen eigenständigen Markdown-Bericht mit Diagnosen, nächsten Schritten
+und Originalbefunden. Kopplungen an Anwendungscode sind informativ und werden
+mit --couplings aufgenommen.
+
+  php bin/console sillbeam:report
+  php bin/console sillbeam:report --output=docs/architecture-report.md
+  php bin/console sillbeam:report --couplings --output=architecture-report.md
+
+Standard ist architecture-report.md im Projektverzeichnis. --output akzeptiert
+absolute und projektbezogene Pfade. Das übergeordnete Verzeichnis muss existieren.
+Der Bericht wird atomar ersetzt. Verstöße und eine nicht verfügbare Analyse
+werden ebenfalls dokumentiert, sofern der Bericht geschrieben werden kann.
+Exit 0: gültig. Exit 1: Verstöße. Exit 2: nicht verfügbar, ungültiger Aufruf
+oder Schreibfehler. --quiet unterdrückt die Statusausgabe.
+Der Sillbeam-Console-Adapter unterstützt Berichte vor der Container-Kompilierung.',
+    'cli.report.invalid_path' => 'Die Ausgabe benötigt einen lokalen Dateipfad.',
+    'cli.report.missing_directory' => 'Das Ausgabeverzeichnis existiert nicht: {path}',
+    'cli.report.temporary' => 'Ein temporärer Bericht kann in {path} nicht erstellt werden',
+    'cli.report.write' => 'Der temporäre Bericht kann in {path} nicht geschrieben werden',
+    'cli.report.replace' => 'Die Ausgabedatei kann nicht ersetzt werden: {path}',
+    'cli.report.written' => 'Architekturbericht wurde nach {path} geschrieben ({status}).',
+    'cli.report.failure' => 'Der Architekturbericht kann nicht geschrieben werden: {error}',
+    'report.markdown.title' => '# Sillbeam-Architekturbericht',
+    'report.markdown.summary' => '## Architekturübersicht',
+    'report.markdown.overview' => '## Architekturkatalog',
+    'report.markdown.incomplete' => '**Analyse unvollständig.** Die Anzahlen beziehen sich auf verfügbare Befunde und Katalogeinträge. Weitere Probleme können unerkannt sein.',
+    'report.markdown.evidence' => 'Verfügbare Deklarationen. Aktivierung und Graphgültigkeit sind unbekannt. Die Kanten dokumentieren deklarierte Beziehungen.',
+    'report.markdown.no_catalog' => 'Es liegen keine Modul- oder Projektelemente vor.',
+    'report.markdown.unknown_catalog' => 'Die unvollständige Analyse liefert keinen verlässlichen Katalog.',
+    'report.markdown.no_findings' => 'Keine Architekturbefunde.',
+    'report.markdown.diagnosis_ids' => 'Die Nummern kennzeichnen Gruppen dieses Laufs. Jeder Originalbefund gehört zu einer der folgenden Diagnosen.',
+    'report.markdown.impact' => '**Auswirkungen**',
+    'report.markdown.steps' => '**Nächste Schritte**',
+    'report.markdown.locations' => '**Fundstellen**',
+    'report.markdown.scope' => 'Geprüft wurden die Sillbeam-Architekturregeln. Allgemeine Codequalität, Sicherheit und der Symfony-Service-Container sind nicht Gegenstand des Berichts.',
+    'report.markdown.version' => 'Sillbeam-Version: {version}',
+    'report.markdown.date' => 'Geprüft am: {date}',
+    'report.markdown.status' => 'Status: {status}',
+    'report.markdown.diagnosis' => '### Diagnose {index}: {title}',
+    'report.markdown.original' => '**Originalbefund {index}** — Regel: {rule} ({severity})',
+    'api.inventory.link' => 'Ein Quelllink ist defekt oder verweist aus den konfigurierten Quellverzeichnissen hinaus.',
     'api.doctor_check_failed' => 'Ein technischer Fehler hat die Prüfung verhindert.',
     'api.inventory.format' => 'Das Ausgabeformat für das Quellinventar muss json sein.',
     'api.graph.shared' => 'Gemeinsame Module',

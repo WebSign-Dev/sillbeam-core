@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture;
 
+use Sillbeam\Core\I18n\CoreError;
 use Sillbeam\Core\Module\Attribute\SillbeamModule;
 use Sillbeam\Core\Project\Attribute\SillbeamProject;
 
@@ -31,18 +32,18 @@ final readonly class DescriptorCreator
     public function create(string $name, bool $project = false, ?string $owner = null): string
     {
         if (!preg_match('/^[a-zA-Z][a-zA-Z0-9]*$/D', $name)) {
-            throw new \InvalidArgumentException('Name must start with an ASCII letter and contain only ASCII letters and digits.');
+            throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.name');
         }
         // Only the first ASCII letter changes; preserve the rest of the base name.
         $name = ucfirst($name);
         $suffix = $project ? 'Project' : 'Module';
         if (str_ends_with($name, $suffix)) {
-            throw new \InvalidArgumentException('Pass the base name without the '.$suffix.' suffix.');
+            throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.suffix', ['suffix' => $suffix]);
         }
         $roots = $project ? $this->options->projectRoots : $this->options->moduleRoots;
         if (null === $owner) {
             if (1 !== \count($roots)) {
-                throw new \InvalidArgumentException('Configure exactly one sillbeam.discovery.'.($project ? 'projects' : 'modules').' root for creation.');
+                throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.root', ['type' => $project ? 'projects' : 'modules']);
             }
             $directory = $roots[0]->path.'/'.$name;
         } else {
@@ -53,21 +54,21 @@ final readonly class DescriptorCreator
                 }
             }
             if (1 !== \count($matches)) {
-                throw new \InvalidArgumentException('Project "'.$owner.'" must identify exactly one existing discovered project. Create or configure the project first.');
+                throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.owner', ['owner' => $owner]);
             }
             $directory = $matches[0]->directory.'/Module/'.$name;
         }
         $file = $directory.'/'.$name.$suffix.'.php';
         for ($path = $file; '/' !== $path && '.' !== $path; $path = \dirname($path)) {
             if (is_link($path) || preg_match('~(?:^|/)\.\.?(/|$)~', $path)) {
-                throw new \InvalidArgumentException('Unsafe creation path: '.$path);
+                throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.unsafe', ['path' => $path]);
             }
             if ($this->options->excluded($path)) {
-                throw new \InvalidArgumentException('Creation path is excluded from discovery: '.$path);
+                throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.excluded', ['path' => $path]);
             }
         }
         if (file_exists($directory) || is_link($directory)) {
-            throw new \InvalidArgumentException('Creation target already exists: '.$directory);
+            throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.exists', ['path' => $directory]);
         }
         $namespace = $this->options->namespaceForDirectory($directory);
         $attribute = $project ? SillbeamProject::class : SillbeamModule::class;
@@ -77,36 +78,36 @@ final readonly class DescriptorCreator
         try {
             (new \PhpParser\ParserFactory())->createForNewestSupportedVersion()->parse($contents);
         } catch (\PhpParser\Error $error) {
-            throw new \InvalidArgumentException('Invalid descriptor name or namespace: '.$error->getMessage(), previous: $error);
+            throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.descriptor', ['error' => $error->getMessage()], previous: $error);
         }
         $discovery = (new ArchitectureDiscovery())->discover($this->options);
         foreach ($discovery->modules as $module) {
             if ((new DiscoveryRoot($module->directory, ''))->contains($directory) || (new DiscoveryRoot($directory, ''))->contains($module->directory)) {
-                throw new \InvalidArgumentException('Creation would overlap an existing module: '.$module->directory);
+                throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.module_overlap', ['path' => $module->directory]);
             }
         }
         foreach ($discovery->projects as $definition) {
             if (($project || null === $owner) && ((new DiscoveryRoot($definition->directory, ''))->contains($directory) || (new DiscoveryRoot($directory, ''))->contains($definition->directory))) {
-                throw new \InvalidArgumentException('Creation would overlap an existing project: '.$definition->directory);
+                throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.project_overlap', ['path' => $definition->directory]);
             }
         }
         if (!$project && null === $owner) {
             foreach ($this->options->projectRoots as $root) {
                 if ($root->contains($directory)) {
-                    throw new \InvalidArgumentException('Module target is inside a project root; use --project.');
+                    throw CoreError::create(\InvalidArgumentException::class, 'cli.make.error.in_project');
                 }
             }
         }
         if (!mkdir($directory, 0777, true)) {
-            throw new \RuntimeException('Cannot create directory: '.$directory);
+            throw CoreError::create(\RuntimeException::class, 'cli.make.error.directory', ['path' => $directory]);
         }
         $handle = fopen($file, 'x');
         if (false === $handle) {
-            throw new \RuntimeException('Cannot exclusively create descriptor: '.$file);
+            throw CoreError::create(\RuntimeException::class, 'cli.make.error.create', ['path' => $file]);
         }
         try {
             if (\strlen($contents) !== fwrite($handle, $contents)) {
-                throw new \RuntimeException('Cannot write descriptor: '.$file);
+                throw CoreError::create(\RuntimeException::class, 'cli.make.error.write', ['path' => $file]);
             }
         } finally {
             fclose($handle);

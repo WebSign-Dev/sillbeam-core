@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Architecture\Console;
 
 use Sillbeam\Core\Architecture\ArchitectureReport;
+use Sillbeam\Core\I18n\CoreTranslator;
 
 /** @internal Standalone Markdown using the same diagnostic recommendations as the CLI. */
 final readonly class ReportRenderer
 {
-    public function __construct(private ArchitectureReport $report)
+    public function __construct(private ArchitectureReport $report, private CoreTranslator $translator = new CoreTranslator())
     {
     }
 
@@ -22,52 +23,52 @@ final readonly class ReportRenderer
         usort($data['projects'], static fn (array $a, array $b): int => strcmp($catalog->projects[$a['class']], $catalog->projects[$b['class']]));
         $errors = \count(array_filter($data['findings'], static fn (array $finding): bool => 'error' === $finding['severity']));
         $lines = [
-            '# Sillbeam architecture report', '',
-            'Sillbeam version: '.self::escape($version), '',
-            'Checked at: '.$checkedAt->setTimezone(new \DateTimeZone('UTC'))->format(\DateTimeInterface::ATOM), '',
-            'Status: '.self::escape($data['status']), '',
-            'Analysis complete: '.($data['complete'] ? 'yes' : 'no'), '',
-            '## Architecture Summary', '',
-            'Findings: '.\count($data['findings']).' · Diagnoses: '.\count($view['issues']), '',
-            'Violations: '.$errors.' · Blockers: '.(\count($data['findings']) - $errors), '',
-            'Modules checked: '.\count($data['modules']).' · Projects checked: '.\count($data['projects']), '',
+            $this->translator->text('report.markdown.title'), '',
+            $this->translator->text('report.markdown.version', ['version' => self::escape($version)]), '',
+            $this->translator->text('report.markdown.date', ['date' => $checkedAt->setTimezone(new \DateTimeZone('UTC'))->format(\DateTimeInterface::ATOM)]), '',
+            $this->translator->text('report.markdown.status', ['status' => self::escape($data['status'])]), '',
+            $this->translator->text('report.markdown.complete', ['complete' => $this->translator->text($data['complete'] ? 'report.markdown.yes' : 'report.markdown.no')]), '',
+            $this->translator->text('report.markdown.summary'), '',
+            $this->translator->text('report.markdown.counts', ['findings' => \count($data['findings']), 'diagnoses' => \count($view['issues'])]), '',
+            $this->translator->text('report.markdown.severity_counts', ['errors' => $errors, 'blockers' => \count($data['findings']) - $errors]), '',
+            $this->translator->text('report.markdown.catalog_counts', ['modules' => \count($data['modules']), 'projects' => \count($data['projects'])]), '',
         ];
         if (!$data['complete']) {
-            $lines[] = '**Analysis incomplete.** Counts reflect available findings and catalog entries only; undiscovered problems may remain.';
+            $lines[] = $this->translator->text('report.markdown.incomplete');
             $lines[] = '';
         }
-        $lines[] = '## Architecture Overview';
+        $lines[] = $this->translator->text('report.markdown.overview');
         $lines[] = '';
         if (!$data['valid']) {
-            $lines[] = 'Available declarations only: activation and graph validity are unknown. Declared edges below are evidence, not an approved runtime graph.';
+            $lines[] = $this->translator->text('report.markdown.evidence');
             $lines[] = '';
         }
         if ([] === $data['modules'] && [] === $data['projects']) {
-            $lines[] = $data['complete'] ? 'No module or Project catalog entries are available.' : 'No reliable catalog is available from this incomplete analysis.';
+            $lines[] = $data['complete'] ? $this->translator->text('report.markdown.no_catalog') : $this->translator->text('report.markdown.unknown_catalog');
             $lines[] = '';
         }
-        $lines = [...$lines, ...$this->overview($data, $catalog), '## Diagnoses & Resolutions', ''];
+        $lines = [...$lines, ...$this->overview($data, $catalog), $this->translator->text('report.markdown.diagnoses'), ''];
         if ([] === $view['issues']) {
-            $lines[] = 'No architecture findings.';
+            $lines[] = $this->translator->text('report.markdown.no_findings');
             $lines[] = '';
         } else {
-            $lines[] = 'Numbers identify groups in this check run only. Every original finding belongs to one diagnosis below.';
+            $lines[] = $this->translator->text('report.markdown.diagnosis_ids');
             $lines[] = '';
         }
         foreach ($view['issues'] as $index => $issue) {
-            $lines = [...$lines, '### '.($index + 1).'. '.self::escape($issue['title']), '', self::escape(self::relation($issue, $catalog)), '', '**Problem**', '', self::escape(self::description($issue, $issue['original_problem'] ?? $issue['problem'], $catalog)), ''];
-            $lines[] = '**Why it matters**';
+            $lines = [...$lines, '### '.($index + 1).'. '.self::escape($issue['title']), '', self::escape(self::relation($issue, $catalog)), '', $this->translator->text('report.markdown.problem'), '', self::escape(self::description($issue, $issue['original_problem'] ?? $issue['problem'], $catalog)), ''];
+            $lines[] = $this->translator->text('report.markdown.impact');
             $lines[] = '';
             $lines[] = self::escape(self::description($issue, $issue['original_impact'] ?? $issue['impact'], $catalog));
             $lines[] = '';
-            $lines[] = '**Next steps**';
+            $lines[] = $this->translator->text('report.markdown.steps');
             $lines[] = '';
             foreach (array_unique($issue['steps']) as $step) {
                 $lines[] = '- '.self::escape($step);
             }
             $lines[] = '';
             if ([] !== $issue['references']) {
-                $lines[] = '**Locations**';
+                $lines[] = $this->translator->text('report.markdown.locations');
                 $lines[] = '';
                 foreach ($issue['references'] as $reference) {
                     $lines[] = '- '.self::escape($reference['readable'] ?? $reference['file'].(\is_int($reference['line']) ? ':'.$reference['line'] : ''));
@@ -75,15 +76,15 @@ final readonly class ReportRenderer
                 $lines[] = '';
             }
         }
-        $lines = [...$lines, '## Technical Evidence', '', ...$this->identities($data, $catalog)];
+        $lines = [...$lines, $this->translator->text('report.markdown.technical'), '', ...$this->identities($data, $catalog)];
         foreach ($view['issues'] as $index => $issue) {
-            $lines[] = '### Diagnosis '.($index + 1).': '.self::escape($issue['title']);
+            $lines[] = $this->translator->text('report.markdown.diagnosis', ['index' => $index + 1, 'title' => self::escape($issue['title'])]);
             $lines[] = '';
             $lines[] = self::escape($issue['detail']);
             $lines[] = '';
             foreach ($issue['originals'] as $number => $original) {
                 $finding = $original['finding'];
-                $lines[] = '**Original finding '.($number + 1).'** — Rule: '.self::escape($finding['rule']).' ('.self::escape($finding['severity']).')';
+                $lines[] = $this->translator->text('report.markdown.original', ['index' => $number + 1, 'rule' => self::escape($finding['rule']), 'severity' => self::escape($finding['severity'])]);
                 $lines[] = '';
                 $lines[] = self::escape($finding['message']);
                 $lines[] = '';
@@ -96,19 +97,19 @@ final readonly class ReportRenderer
             }
         }
         if ($includeCouplings && [] !== $view['couplings']) {
-            $lines = [...$lines, '## Application couplings (informational)', '', 'Observed references to application code outside modules; these are not architecture violations and do not change the exit code.', ''];
+            $lines = [...$lines, $this->translator->text('report.markdown.couplings'), '', $this->translator->text('report.markdown.couplings_scope'), ''];
             foreach ($view['couplings'] as $coupling) {
                 $source = $catalog->modules[$coupling['source'] ?? ''] ?? null;
                 $relation = null === $source ? $coupling['relation'] : $source.' → '.$coupling['references'][0]['class'];
                 $lines[] = '### '.self::escape($relation);
                 $lines[] = '';
                 foreach ($coupling['references'] as $reference) {
-                    $lines[] = '- '.self::escape($reference['class']).' — At: '.self::escape($reference['file'].':'.$reference['line']).'; target: '.self::escape($reference['target_file']);
+                    $lines[] = $this->translator->text('report.markdown.reference_evidence', ['class' => self::escape($reference['class']), 'location' => self::escape($reference['file'].':'.$reference['line']), 'target' => self::escape($reference['target_file'])]);
                 }
                 $lines[] = '';
             }
         }
-        $lines[] = 'Only Sillbeam architecture rules were checked. This report does not assess overall code quality, security or Symfony service-container health.';
+        $lines[] = $this->translator->text('report.markdown.scope');
         $lines[] = '';
 
         return implode("\n", $lines);
@@ -157,34 +158,34 @@ final readonly class ReportRenderer
         $lines = [];
         $details = [];
         if ([] !== $data['modules']) {
-            $lines = ['### Modules', ''];
+            $lines = [$this->translator->text('report.markdown.modules'), ''];
             $rows = $blocks = [];
             foreach ($data['modules'] as $module) {
                 $name = $catalog->modules[$module['class']];
                 $dependencies = array_values(array_map(static fn (string $class): string => $catalog->modules[$class], $module['declared_dependencies']));
-                $cell = self::listSummary($dependencies, 'declared');
+                $cell = self::listSummary($dependencies, $this->translator->text('report.markdown.declared'));
                 if (self::longList($dependencies)) {
-                    $details = [...$details, '#### Dependencies of '.self::escape($name), ''];
+                    $details = [...$details, $this->translator->text('report.markdown.deps_title', ['name' => self::escape($name)]), ''];
                     foreach ($dependencies as $dependency) {
                         $details[] = '- '.self::escape($dependency);
                     }
                     $details[] = '';
                 }
-                $scope = 'private' === $module['scope'] ? 'Private' : 'Shared';
-                $state = !$data['valid'] || !$data['complete'] ? 'Unknown' : (true === ($module['active'] ?? null) ? 'Active' : (false === ($module['active'] ?? null) && \in_array($module['inactive_reason'] ?? null, ['disabled', 'unassigned'], true) ? ucfirst($module['inactive_reason']) : 'Unknown'));
+                $scope = 'private' === $module['scope'] ? $this->translator->text('report.markdown.private') : $this->translator->text('report.markdown.shared');
+                $state = !$data['valid'] || !$data['complete'] ? $this->translator->text('report.markdown.unknown') : (true === ($module['active'] ?? null) ? $this->translator->text('report.markdown.active') : (false === ($module['active'] ?? null) && \in_array($module['inactive_reason'] ?? null, ['disabled', 'unassigned'], true) ? ucfirst($module['inactive_reason']) : $this->translator->text('report.markdown.unknown')));
                 if (mb_strlen($name) <= 48) {
                     $rows[] = '| '.self::escape($name).' | '.$scope.' | '.$state.' | '.self::escape($cell).' |';
                 } else {
-                    $blocks = [...$blocks, '#### '.self::escape($name), '', '- Scope: '.$scope, '- State: '.$state, '- Dependencies: '.self::escape($cell), ''];
+                    $blocks = [...$blocks, '#### '.self::escape($name), '', $this->translator->text('report.markdown.scope_label', ['scope' => $scope]), $this->translator->text('report.markdown.state_label', ['state' => $state]), $this->translator->text('report.markdown.deps_label', ['dependencies' => self::escape($cell)]), ''];
                 }
             }
             if ([] !== $rows) {
-                $lines = [...$lines, '| Module | Scope | State | Dependencies |', '| --- | --- | --- | --- |', ...$rows, ''];
+                $lines = [...$lines, $this->translator->text('report.markdown.module_table'), '| --- | --- | --- | --- |', ...$rows, ''];
             }
             $lines = [...$lines, ...$blocks, ...$details];
         }
         if ([] !== $data['projects']) {
-            $lines = [...$lines, '### Projects', ''];
+            $lines = [...$lines, $this->translator->text('report.markdown.projects'), ''];
             $rows = $blocks = [];
             $details = [];
             foreach ($data['projects'] as $project) {
@@ -192,13 +193,13 @@ final readonly class ReportRenderer
                 $modules = array_values(array_map(static fn (string $class): string => $catalog->modules[$class], $project['declaredModules']));
                 $hosts = $project['hosts'];
                 if (mb_strlen($name) <= 48) {
-                    $rows[] = '| '.self::escape($name).' | '.self::escape(self::listSummary($hosts, 'hosts')).' | '.self::escape(self::listSummary($modules, 'declared')).' |';
+                    $rows[] = '| '.self::escape($name).' | '.self::escape(self::listSummary($hosts, $this->translator->text('report.markdown.hosts_count'))).' | '.self::escape(self::listSummary($modules, $this->translator->text('report.markdown.declared'))).' |';
                 } else {
-                    $blocks = [...$blocks, '#### '.self::escape($name), '', '- Configured hosts: '.self::escape(self::listSummary($hosts, 'hosts')), '- Declared modules: '.self::escape(self::listSummary($modules, 'declared')), ''];
+                    $blocks = [...$blocks, '#### '.self::escape($name), '', $this->translator->text('report.markdown.host_label', ['hosts' => self::escape(self::listSummary($hosts, $this->translator->text('report.markdown.hosts_count')))]), $this->translator->text('report.markdown.modules_label', ['modules' => self::escape(self::listSummary($modules, $this->translator->text('report.markdown.declared')))]), ''];
                 }
-                foreach (['Hosts' => $hosts, 'Declared modules' => $modules] as $title => $items) {
+                foreach ([$this->translator->text('report.markdown.hosts_title') => $hosts, $this->translator->text('report.markdown.modules_title') => $modules] as $title => $items) {
                     if (self::longList($items)) {
-                        $details = [...$details, '#### '.$title.' of '.self::escape($name), ''];
+                        $details = [...$details, $this->translator->text('report.markdown.detail_title', ['title' => $title, 'name' => self::escape($name)]), ''];
                         foreach ($items as $item) {
                             $details[] = '- '.self::escape($item);
                         }
@@ -207,7 +208,7 @@ final readonly class ReportRenderer
                 }
             }
             if ([] !== $rows) {
-                $lines = [...$lines, '| Project | Configured hosts | Declared modules |', '| --- | --- | --- |', ...$rows, ''];
+                $lines = [...$lines, $this->translator->text('report.markdown.project_table'), '| --- | --- | --- |', ...$rows, ''];
             }
             $lines = [...$lines, ...$blocks, ...$details];
         }
@@ -234,26 +235,26 @@ final readonly class ReportRenderer
     {
         $lines = [];
         if ([] !== $data['modules'] || [] !== $data['projects'] || [] !== $catalog->unresolvedModules) {
-            $lines = ['### Catalog identities', '', 'These identities map the overview labels to original descriptor classes and files.', ''];
+            $lines = [$this->translator->text('report.markdown.catalog_identity'), '', $this->translator->text('report.markdown.catalog_identity_info'), ''];
         }
         foreach ($data['modules'] as $module) {
-            $lines = [...$lines, '**Module: '.self::escape($catalog->modules[$module['class']]).'**', '', '- Class: '.self::escape($module['class']), '- Descriptor: '.self::escape($module['descriptor'])];
+            $lines = [...$lines, $this->translator->text('report.markdown.module_title', ['name' => self::escape($catalog->modules[$module['class']])]), '', $this->translator->text('report.markdown.module_class', ['class' => self::escape($module['class'])]), $this->translator->text('report.markdown.module_descriptor', ['path' => self::escape($module['descriptor'])])];
             if (null !== ($module['project'] ?? null)) {
-                $lines[] = '- Owning Project: '.self::escape($module['project']);
+                $lines[] = $this->translator->text('report.markdown.owner_label', ['project' => self::escape($module['project'])]);
             }
             $lines[] = '';
         }
         foreach ($data['projects'] as $project) {
-            $lines = [...$lines, '**Project: '.self::escape($catalog->projects[$project['class']]).'**', '', '- Class: '.self::escape($project['class']), '- Descriptor: '.self::escape($project['descriptorFile']), ''];
+            $lines = [...$lines, $this->translator->text('report.markdown.project_title', ['name' => self::escape($catalog->projects[$project['class']])]), '', $this->translator->text('report.markdown.project_class', ['class' => self::escape($project['class'])]), $this->translator->text('report.markdown.project_descriptor', ['path' => self::escape($project['descriptorFile'])]), ''];
         }
         foreach ($catalog->unresolvedModules as $class) {
-            $lines = [...$lines, '**Unresolved module: '.self::escape($catalog->modules[$class]).'**', '', '- Reported class: '.self::escape($class), ''];
+            $lines = [...$lines, $this->translator->text('report.markdown.unresolved_title', ['name' => self::escape($catalog->modules[$class])]), '', $this->translator->text('report.markdown.reported_class', ['class' => self::escape($class)]), ''];
         }
         foreach ($catalog->classes as $class => $label) {
-            $lines = [...$lines, '**Referenced class: '.self::escape($label).'**', '', '- Reported class: '.self::escape($class), ''];
+            $lines = [...$lines, $this->translator->text('report.markdown.reference_title', ['name' => self::escape($label)]), '', $this->translator->text('report.markdown.reported_class', ['class' => self::escape($class)]), ''];
         }
         if ([] === $lines && [] === $data['findings']) {
-            $lines = ['No additional technical evidence.', ''];
+            $lines = [$this->translator->text('report.markdown.no_evidence'), ''];
         }
 
         return $lines;

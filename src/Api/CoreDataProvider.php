@@ -51,7 +51,7 @@ final readonly class CoreDataProvider implements CoreDataProviderInterface
                 $inputs = new SnapshotInputs($input->projectDir, $this->kernelFile);
             }
             $started = hrtime(true);
-            $result = (new ArchitectureAnalyzer(new SourceInspector(limitParseFailuresToDiscoveryRoots: true, inventory: $inventory)))->analyze($input->options, $input->config);
+            $result = (new ArchitectureAnalyzer(new SourceInspector(inventory: $inventory)))->analyze($input->options, $input->config);
         } catch (\Throwable $error) {
             $failure = $error::class;
             $result = new ArchitectureAnalysisResult();
@@ -67,9 +67,13 @@ final readonly class CoreDataProvider implements CoreDataProviderInterface
     /** @return array{data: CoreDataObject, status: string, errors: list<array{code: string, path: ?string}>} */
     public function inspectSources(): array
     {
-        $input = $this->resolveConfiguration();
         $evidence = new SourceInventoryEvidence();
-        $inspector = new SourceInspector(limitParseFailuresToDiscoveryRoots: true, inventory: $evidence, inventoryOnly: true);
+        try {
+            $input = $this->resolveConfiguration();
+        } catch (\Throwable) {
+            return (new SourceInventory(static fn (string $path): ?string => null))->project(null, null, $evidence);
+        }
+        $inspector = new SourceInspector(inventory: $evidence, inventoryOnly: true);
         $discovery = null;
         try {
             $discovery = (new ArchitectureDiscovery($inspector))->discover($input->options);

@@ -7,13 +7,15 @@ namespace Sillbeam\Core\Api;
 /** @internal Canonical, locale-independent architecture fingerprint. */
 final class ArchitectureFingerprint
 {
-    public const int VERSION = 1;
+    public const int VERSION = 2;
 
     /** @param array<string, CoreDataObject> $modules
      * @param array<string, CoreDataObject>                                          $projects
      * @param array{module: list<CoreDataObject>, application: list<CoreDataObject>} $references
+     * @param \Closure(string): ?string                                              $relativePath
+     * @param array{findings: list<CoreDataObject>, diagnoses: list<CoreDataObject>} $diagnostics
      */
-    public static function hash(string $status, array $modules, array $projects, array $references): string
+    public static function hash(string $status, array $modules, array $projects, array $references, array $diagnostics, \Closure $relativePath): ?string
     {
         $moduleData = array_map(static function (CoreDataObject $module): array {
             $fields = $module->fields;
@@ -41,7 +43,40 @@ final class ArchitectureFingerprint
                 $relationships[$kind][serialize($fields)] = $fields;
             }
         }
-        $data = ['status' => $status, 'modules' => $moduleData, 'projects' => $projectData, 'references' => array_map('array_values', $relationships)];
+        $findings = [];
+        foreach ($diagnostics['findings'] as $finding) {
+            $row = $finding->fields;
+            $context = $row['context'];
+            if (!$context instanceof CoreDataObject) {
+                throw new \LogicException('Expected a structured finding context.');
+            }
+            $identity = $context->fields;
+            if (isset($identity['file'])) {
+                $file = $identity['file'];
+                if (!\is_string($file) || null === ($path = $relativePath($file))) {
+                    return null;
+                }
+                $identity['file'] = $path;
+            }
+            unset($identity['line'], $identity['column']);
+            $findings[] = ['rule' => $row['rule'], 'severity' => $row['severity'], 'context' => $identity];
+        }
+        $groups = [];
+        foreach ($diagnostics['diagnoses'] as $diagnosis) {
+            $row = $diagnosis->fields;
+            $indexes = $row['finding_indexes'];
+            if (!\is_array($indexes)) {
+                throw new \LogicException('Expected finding indexes.');
+            }
+            $groups[] = [
+                'basis' => $row['basis'], 'modules' => $row['modules'],
+                'findings' => array_map(static fn (int $index): array => $findings[$index], $indexes),
+            ];
+        }
+        $data = [
+            'status' => $status, 'modules' => $moduleData, 'projects' => $projectData,
+            'references' => array_map('array_values', $relationships), 'diagnoses' => $groups,
+        ];
 
         return 'sha256:v'.self::VERSION.':'.hash('sha256', json_encode(self::normalize($data), \JSON_THROW_ON_ERROR));
     }

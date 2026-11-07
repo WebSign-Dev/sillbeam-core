@@ -106,7 +106,7 @@ final class CoreDataAssembler
             $completeness['graph'] = $graphComplete ? 'complete' : ('unavailable' === $graphState ? 'unavailable' : 'partial');
             $graph = SnapshotGraph::project($modules, $projects, $references['module'], $graphState, 'complete' === $completeness['references'], $this->locales);
             if ($complete && $graphComplete && [] === $changed && !$configurationChanged) {
-                $fingerprint = ArchitectureFingerprint::hash($status, $modules, $projects, $references);
+                $fingerprint = ArchitectureFingerprint::hash($status, $modules, $projects, $references, $diagnostics, $this->relative(...));
             }
         }
         $hasEvidence = array_any($completeness, static fn (string $domain): bool => 'complete' === $domain || 'partial' === $domain);
@@ -119,7 +119,7 @@ final class CoreDataAssembler
         return new CoreDataDocument(
             $this->request,
             new CoreDataObject([
-                'core_version' => CoreCapabilitiesProvider::CORE_VERSION,
+                'core_version' => CoreCapabilitiesProvider::coreVersion(),
                 'analysis_run_id' => self::runId(),
                 'analyzed_at' => $analyzedAt,
                 'duration_ms' => $duration,

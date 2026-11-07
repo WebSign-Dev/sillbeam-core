@@ -7,6 +7,7 @@ namespace Sillbeam\Core\Console\Api;
 use Sillbeam\Core\Api\CoreCapabilitiesProvider;
 use Sillbeam\Core\Api\CoreCapabilitiesProviderInterface;
 use Sillbeam\Core\I18n\CoreError;
+use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -24,7 +25,7 @@ final class CoreCapabilitiesCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption('format', null, InputOption::VALUE_REQUIRED, 'Output format (json).', 'json');
+        $this->addOption('format', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.capabilities_format'), 'json');
     }
 
     public function run(InputInterface $input, OutputInterface $output): int

@@ -3,6 +3,272 @@
 declare(strict_types=1);
 
 return [
+    'cli.make.error.name' => 'Name must start with an ASCII letter and contain only ASCII letters and digits.',
+    'cli.make.error.suffix' => 'Pass the base name without the {suffix} suffix.',
+    'cli.make.error.root' => 'Configure exactly one sillbeam.discovery.{type} root for creation.',
+    'cli.make.error.owner' => 'Project "{owner}" must identify exactly one existing discovered project. Create or configure the project first.',
+    'cli.make.error.unsafe' => 'Unsafe creation path: {path}',
+    'cli.make.error.excluded' => 'Creation path is excluded from discovery: {path}',
+    'cli.make.error.exists' => 'Creation target already exists: {path}',
+    'cli.make.error.module_overlap' => 'Creation would overlap an existing module: {path}',
+    'cli.make.error.project_overlap' => 'Creation would overlap an existing project: {path}',
+    'cli.make.error.in_project' => 'Module target is inside a project root; use --project.',
+    'cli.make.error.directory' => 'Cannot create directory: {path}',
+    'cli.make.error.create' => 'Cannot exclusively create descriptor: {path}',
+    'cli.make.error.write' => 'Cannot write descriptor: {path}',
+    'cli.make.error.descriptor' => 'Invalid descriptor name or namespace: {error}',
+    'cli.about.title' => 'About',
+    'cli.about.application' => 'Application',
+    'cli.about.environment' => 'Environment',
+    'cli.about.debug' => 'Debug',
+    'cli.about.php' => 'Php',
+    'cli.about.symfony' => 'Symfony',
+    'cli.about.sillbeam' => 'Sillbeam',
+    'cli.about.modules' => 'Modules',
+    'cli.about.modules_enabled' => 'Modules Enabled',
+    'report.markdown.deps_title' => '#### Dependencies of {name}',
+    'report.markdown.host_label' => '- Configured hosts: {hosts}',
+    'report.markdown.modules_label' => '- Declared modules: {modules}',
+    'report.markdown.detail_title' => '#### {title} of {name}',
+    'report.markdown.module_title' => '**Module: {name}**',
+    'report.markdown.project_title' => '**Project: {name}**',
+    'report.markdown.unresolved_title' => '**Unresolved module: {name}**',
+    'report.markdown.reference_title' => '**Referenced class: {name}**',
+    'report.markdown.reference_evidence' => '- {class} — At: {location}; target: {target}',
+    'cli.inspect.scope_line' => 'Scope: {scope}{owner}',
+    'cli.inspect.global_state' => 'Global activation: {state}; differs from the selected Project.',
+    'cli.inspect.enabled_override' => 'Configured enabled override: {value} (input, not proof of activation)',
+    'cli.inspect.owner_class' => 'Owner class: {class}',
+    'cli.inspect.inspection_project' => 'Inspection Project: {id}',
+    'cli.inspect.project_class' => 'Project class: {class}',
+    'cli.inspect.project_state' => 'Project {id}: {state} — {class}',
+    'cli.inspect.reference_at' => '{class} at {file}:{line}',
+    'cli.inspect.context' => 'Context: {context}',
+    'cli.inspect.owner_suffix' => ' · Owner Project: {project}',
+    'cli.inspect.evidence.both' => 'Declared + Observed',
+    'cli.inspect.evidence.observed' => 'Observed without declaration',
+    'cli.inspect.evidence.declared' => 'Declared only',
+    'cli.inspect.evidence.unverified' => 'Declared; observation not verified',
+    'cli.graph.label.shared' => 'Shared modules',
+    'cli.graph.label.unresolved' => 'Unresolved targets',
+    'cli.graph.label.complete' => 'Analysis complete',
+    'cli.graph.label.incomplete' => 'Analysis incomplete',
+    'cli.graph.label.refs_complete' => 'Reference evidence complete',
+    'cli.graph.label.refs_incomplete' => 'Reference evidence incomplete; missing edges do not prove absence',
+    'cli.graph.label.catalog_empty' => 'Module catalog unavailable or empty; no runtime membership inferred',
+    'cli.graph.label.legend' => 'Legend: arrow = depends on; dashed orange = observed undeclared',
+    'cli.graph.label.states' => 'Gray = disabled; dashed node = unknown; red border = recorded cycle member',
+    'cli.graph.label.validated' => 'catalog evidence; runtime activation only where known',
+    'cli.graph.label.evidence' => 'diagnostic evidence; NOT a validated runtime graph',
+    'cli.graph.label.disabled' => '; disabled',
+    'cli.graph.label.cycle' => '; recorded cycle member',
+    'cli.graph.label.analysis' => 'Analysis: {status}; {evidence}',
+    'cli.graph.label.project_context' => 'Project context: {id}; incident cross-boundary evidence retained',
+    'cli.graph.label.focus' => 'Module: {class}; direct incoming/outgoing relationships only',
+    'cli.graph.label.membership' => 'Project: {id}; membership={state}; no private modules in view',
+    'cli.graph.label.groups' => 'Private modules | {id}{class}; membership={state}',
+    'cli.graph.label.unresolved_node' => 'unresolved module target
+{class}
+state=unknown',
+    'report.markdown.private' => 'Private',
+    'report.markdown.shared' => 'Shared',
+    'report.markdown.unknown' => 'Unknown',
+    'report.markdown.active' => 'Active',
+    'report.markdown.declared' => 'declared',
+    'report.markdown.hosts_count' => 'hosts',
+    'report.markdown.hosts_title' => 'Hosts',
+    'report.markdown.modules_title' => 'Declared modules',
+    'report.markdown.scope_label' => '- Scope: {scope}',
+    'report.markdown.state_label' => '- State: {state}',
+    'report.markdown.deps_label' => '- Dependencies: {dependencies}',
+    'report.markdown.owner_label' => '- Owning Project: {project}',
+    'report.markdown.module_class' => '- Class: {class}',
+    'report.markdown.module_descriptor' => '- Descriptor: {path}',
+    'report.markdown.project_class' => '- Class: {class}',
+    'report.markdown.project_descriptor' => '- Descriptor: {path}',
+    'report.markdown.reported_class' => '- Reported class: {class}',
+    'cli.inspect.declared' => 'DECLARED DEPENDENCIES',
+    'cli.inspect.observed' => 'OBSERVED DEPENDENCIES',
+    'cli.inspect.incoming_declared' => 'INCOMING DECLARED DEPENDENCIES',
+    'cli.inspect.incoming_observed' => 'INCOMING OBSERVED REFERENCES',
+    'cli.inspect.none' => 'None recorded.',
+    'cli.inspect.none_verified' => 'None recorded; absence requires complete evidence.',
+    'cli.inspect.descriptor_class' => 'Descriptor class',
+    'cli.inspect.descriptor_file' => 'Descriptor file',
+    'cli.inspect.scope' => 'Scope',
+    'cli.inspect.owner' => 'Owner Project',
+    'cli.inspect.configuration_key' => 'Configuration key',
+    'cli.inspect.override' => 'Override',
+    'cli.inspect.enabled' => 'Enabled',
+    'cli.inspect.active' => 'Active',
+    'cli.inspect.state' => 'State',
+    'cli.inspect.global_active' => 'Global active',
+    'cli.inspect.activation_reasons' => 'Activation reasons',
+    'cli.inspect.none_shared' => 'none (shared)',
+    'cli.inspect.none_recorded' => 'none recorded',
+    'cli.make.module_name' => 'Module name.',
+    'cli.make.project' => 'Existing project name, id or descriptor class.',
+    'cli.make.created' => 'Created {path}',
+    'cli.make.project_name' => 'Project name.',
+    'cli.make.hosts' => 'If multiple projects exist, configure sillbeam.projects.<id>.hosts for every project before the next application boot. No configuration files were created.',
+    'cli.svg.path' => 'Supply a nonempty SVG output path without control characters.',
+    'cli.svg.directory' => 'Cannot create SVG output directory: {path}',
+    'cli.svg.writable' => 'SVG output parent directory must be writable: {path}',
+    'cli.svg.temporary' => 'Cannot create temporary SVG output.',
+    'cli.svg.write' => 'Cannot write complete SVG output.',
+    'cli.svg.publish' => 'Cannot publish SVG atomically. The destination may have appeared concurrently; use --force only for intentional replacement.',
+    'cli.svg.regular' => 'SVG destination must be a regular file, never a directory or symbolic link: {path}',
+    'cli.svg.exists' => 'SVG destination already exists. Use --force to replace it intentionally: {path}',
+    'cli.inspect.ambiguous_module' => 'Ambiguous module: {id}. Use --project to select an owner, or the exact descriptor class. Candidates: {candidates}',
+    'cli.inspect.catalog_unknown' => 'Module catalog unavailable or incomplete; cannot determine whether "{id}" exists in this context.',
+    'cli.inspect.module_unknown' => 'Unknown module: {id}. Use a module ID or descriptor class.',
+    'cli.inspect.project_module_unknown' => 'Unknown module: {id} in Project {project}. Use a module ID or descriptor class.',
+    'cli.inspect.project_unknown' => 'Unknown Project: {id}. Use a Project ID or descriptor class. Candidates: {candidates}',
+    'cli.inspect.project_ambiguous' => 'Ambiguous Project: {id}. Use a Project ID or descriptor class. Candidates: {candidates}',
+    'cli.inspect.argument' => 'Module ID or fully qualified descriptor class (case-insensitive).',
+    'cli.inspect.project' => 'Project ID or descriptor class: select private ownership and inspect shared-module membership.',
+    'cli.inspect.invalid' => 'Supply a nonempty module ID/class and, when used, a nonempty --project ID/class.',
+    'cli.inspect.heading' => 'Module inspection',
+    'cli.inspect.activation_unknown' => 'Activation is unknown: no validated graph is available.',
+    'cli.inspect.references_incomplete' => 'Reference evidence is incomplete; missing observations do not prove absence.',
+    'cli.inspect.catalog_incomplete' => 'Module catalog/analysis may be incomplete; counts cover available evidence.',
+    'cli.inspect.depends_on' => 'DEPENDS ON',
+    'cli.inspect.used_by' => 'USED BY',
+    'cli.inspect.issues' => 'ARCHITECTURE ISSUES',
+    'cli.inspect.blockers' => 'ANALYSIS BLOCKERS',
+    'cli.inspect.no_issues' => 'No related architecture findings in the available evidence.',
+    'cli.inspect.no_evidence' => 'None recorded in the available evidence.',
+    'cli.inspect.technical' => 'TECHNICAL DETAILS',
+    'cli.inspect.originals' => 'ORIGINAL FINDINGS',
+    'cli.inspect.no_originals' => 'None related to this inspection.',
+    'cli.inspect.help' => 'Inspect a module using the same ArchitectureAnalyzer result as architecture reporting.
+
+  php bin/console sillbeam:inspect:module Billing
+  php bin/console sillbeam:inspect:module billing --project=shop
+  php bin/console sillbeam:inspect:module \'App\\Module\\Billing\\BillingModule\' -v
+
+IDs and descriptor classes are matched case-insensitively. Ambiguous IDs list all
+candidates. --project filters private ownership and gives shared modules a Project
+context, even when unassigned there. If shared/private IDs still collide, pass the
+fully qualified descriptor class. No new discovery or dependency analysis is run.
+Default output merges direct relations into DEPENDS ON and USED BY with evidence
+labels. Declared only does not mean unnecessary; incomplete observations remain
+unverified. -v adds separate technical lists, reference locations, configuration,
+activation evidence, Project states and original findings/context.
+Enabled is configuration availability, not activation. Actual activation is unknown
+without a validated graph; diagnostic candidate membership is never treated as runtime
+state. Results reflect the available architecture snapshot, not a live service audit.
+Exit 0: valid inspection (also disabled/unassigned); 1: architecture violations;
+2: unavailable analysis, missing/ambiguous selection or invalid usage. Text only;
+no --format/JSON mode. --quiet suppresses output without changing the exit code.
+The Core Console adapter enables inspection before container compilation. No source
+or configuration files are changed; descriptor execution follows existing analysis.',
+    'cli.inspect.module_label' => 'Module: {module} — {state}',
+    'cli.inspect.project_context' => 'Project context: {project}',
+    'cli.inspect.architecture' => 'Architecture: {status} (whole analysis)',
+    'cli.inspect.relationships' => 'Known direct relationships: {outgoing} depends on · {incoming} used by',
+    'cli.inspect.whole' => 'Whole analysis: {status}. Use sillbeam:architecture --all for the complete result.',
+    'report.markdown.diagnoses' => '## Diagnoses & Resolutions',
+    'report.markdown.problem' => '**Problem**',
+    'report.markdown.technical' => '## Technical Evidence',
+    'report.markdown.couplings' => '## Application couplings (informational)',
+    'report.markdown.couplings_scope' => 'Observed references to application code outside modules; these are not architecture violations and do not change the exit code.',
+    'report.markdown.modules' => '### Modules',
+    'report.markdown.projects' => '### Projects',
+    'report.markdown.module_table' => '| Module | Scope | State | Dependencies |',
+    'report.markdown.project_table' => '| Project | Configured hosts | Declared modules |',
+    'report.markdown.catalog_identity' => '### Catalog identities',
+    'report.markdown.catalog_identity_info' => 'These identities map the overview labels to original descriptor classes and files.',
+    'report.markdown.no_evidence' => 'No additional technical evidence.',
+    'report.markdown.complete' => 'Analysis complete: {complete}',
+    'report.markdown.counts' => 'Findings: {findings} · Diagnoses: {diagnoses}',
+    'report.markdown.severity_counts' => 'Violations: {errors} · Blockers: {blockers}',
+    'report.markdown.catalog_counts' => 'Modules checked: {modules} · Projects checked: {projects}',
+    'report.markdown.yes' => 'yes',
+    'report.markdown.no' => 'no',
+    'cli.api.profile' => 'Core Data profile.',
+    'cli.api.locale' => 'Locale for Live output.',
+    'cli.api.version' => 'Core Data schema version.',
+    'cli.api.capabilities_format' => 'Output format (json).',
+    'cli.api.inventory_format' => 'Output format (json).',
+    'cli.graph.format' => 'Output format: svg or mermaid.',
+    'cli.graph.output' => 'SVG output path (default: architecture.svg in the current working directory).',
+    'cli.graph.module' => 'Module ID or descriptor class: direct incoming/outgoing relationships only.',
+    'cli.graph.project' => 'Project ID or descriptor class: private owner/context selection.',
+    'cli.graph.force' => 'Intentionally replace an existing regular SVG file.',
+    'cli.graph.help' => 'Render module identities and direct dependency evidence from the existing report:
+
+  php bin/console sillbeam:graph
+  php bin/console sillbeam:graph --format=svg --output=architecture.svg --force
+  php bin/console sillbeam:graph --module=Billing --project=shop
+  php bin/console sillbeam:graph --format=mermaid > architecture.mmd
+
+SVG is generated directly by Core in PHP. No Graphviz, Node.js, browser or extra
+Composer package is required. Missing output directories are created automatically.
+The default output is architecture.svg in the current working directory.
+Existing files require --force; directory/symlink targets are rejected.
+Serialize forced exports: concurrent changes to the destination entry may be replaced.
+--output and --force apply only to SVG. Successful SVG output confirms the full path;
+--quiet suppresses messages but still writes the file. Renderer errors use STDERR.
+Mermaid writes raw source to STDOUT without decoration; --quiet suppresses source.
+IDs/classes match module inspection case-insensitively; ambiguous IDs need --project
+or an exact descriptor class. --module includes only direct incident relationships.
+--project limits private ownership and shows activation in that Project; incident
+cross-boundary relationships are retained. Shared modules remain visible even when
+unassigned. No discovery, traversal or additional dependency analysis is performed.
+Arrows point from dependent to required module. Observed undeclared edges are dashed;
+recorded cycles, disabled and unknown states remain visible. This is an evidence
+export, not an inferred runtime graph. Incomplete references never prove absence.
+After successful export: exit 0 valid, 1 violations, 2 unavailable analysis.
+Exit 3: invalid invocation/selection. Exit 4: renderer or output failure.
+The Core Console adapter supports diagnostics before container compilation.',
+    'cli.graph.invalid_format' => 'Unsupported --format. Use svg or mermaid.',
+    'cli.graph.mermaid_options' => '--output and --force apply only to SVG; redirect Mermaid STDOUT instead.',
+    'cli.graph.invalid_option' => 'Supply a nonempty --{option} value without control characters.',
+    'cli.graph.written' => 'Architecture SVG written to {path}',
+    'cli.report.couplings' => 'Include the informational Application coupling appendix.',
+    'cli.report.output' => 'Report path, relative to the project root or absolute.',
+    'cli.report.help' => 'Write a standalone Markdown document with every diagnosis, next steps and original
+finding. Application couplings are informational, not architecture violations,
+and are included only with --couplings.
+
+  php bin/console sillbeam:report
+  php bin/console sillbeam:report --output=docs/architecture-report.md
+  php bin/console sillbeam:report --couplings --output=architecture-report.md
+
+The default is architecture-report.md in the project root. Relative --output paths
+use that root; absolute local paths are accepted. The parent directory must exist.
+Replacement is atomic. Violations and unavailable analysis still produce a report
+when writing is possible. Exit codes: 0 valid, 1 violations, 2 unavailable, invalid
+usage or write failure. --quiet suppresses status output, not file writing.
+Use Sillbeam\\Core\\Console\\Application in bin/console to report without a compiled
+container. No source files or architecture configuration are changed.',
+    'cli.report.invalid_path' => 'Output must be a local file path.',
+    'cli.report.missing_directory' => 'Output directory does not exist: {path}',
+    'cli.report.temporary' => 'Cannot create a temporary report in {path}',
+    'cli.report.write' => 'Cannot write the temporary report in {path}',
+    'cli.report.replace' => 'Cannot replace output file: {path}',
+    'cli.report.written' => 'Architecture report written to {path} ({status}).',
+    'cli.report.failure' => 'Cannot write architecture report: {error}',
+    'report.markdown.title' => '# Sillbeam architecture report',
+    'report.markdown.summary' => '## Architecture Summary',
+    'report.markdown.overview' => '## Architecture Overview',
+    'report.markdown.incomplete' => '**Analysis incomplete.** Counts reflect available findings and catalog entries only; undiscovered problems may remain.',
+    'report.markdown.evidence' => 'Available declarations only: activation and graph validity are unknown. Declared edges below are evidence, not an approved runtime graph.',
+    'report.markdown.no_catalog' => 'No module or Project catalog entries are available.',
+    'report.markdown.unknown_catalog' => 'No reliable catalog is available from this incomplete analysis.',
+    'report.markdown.no_findings' => 'No architecture findings.',
+    'report.markdown.diagnosis_ids' => 'Numbers identify groups in this check run only. Every original finding belongs to one diagnosis below.',
+    'report.markdown.impact' => '**Why it matters**',
+    'report.markdown.steps' => '**Next steps**',
+    'report.markdown.locations' => '**Locations**',
+    'report.markdown.scope' => 'Only Sillbeam architecture rules were checked. This report does not assess overall code quality, security or Symfony service-container health.',
+    'report.markdown.version' => 'Sillbeam version: {version}',
+    'report.markdown.date' => 'Checked at: {date}',
+    'report.markdown.status' => 'Status: {status}',
+    'report.markdown.diagnosis' => '### Diagnosis {index}: {title}',
+    'report.markdown.original' => '**Original finding {index}** — Rule: {rule} ({severity})',
+    'api.inventory.link' => 'A source link is broken or points outside the configured source roots.',
     'api.doctor_check_failed' => 'A technical error prevented verification.',
     'api.inventory.format' => 'The source inventory output format must be json.',
     'api.graph.shared' => 'Shared modules',

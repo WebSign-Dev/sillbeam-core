@@ -16,17 +16,17 @@ final class CoreError
     private static ?\WeakMap $resources = null;
 
     /**
-     * @template T of \LogicException
+     * @template T of \Exception
      *
      * @param class-string<T>           $type
      * @param array<string, string|int> $parameters
      *
      * @return T
      */
-    public static function create(string $type, string $key, array $parameters = []): \LogicException
+    public static function create(string $type, string $key, array $parameters = [], ?\Throwable $previous = null): \Exception
     {
         $resource = new CoreMessage($key, $parameters);
-        $error = new $type($resource->render());
+        $error = new $type($resource->render(), 0, $previous);
         self::$resources ??= new \WeakMap();
         self::$resources[$error] = $resource;
 

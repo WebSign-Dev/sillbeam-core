@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Architecture\Console;
 
 use Sillbeam\Core\Architecture\ArchitectureReport;
+use Sillbeam\Core\I18n\CoreTranslator;
 
 /**
  * Human labels and merged direct evidence over an existing ModuleInspection view.
@@ -30,7 +31,7 @@ final class ModuleInspectionPresentation
     /** @var array<string, string> */
     private array $cautions = [];
 
-    public function __construct(private readonly ArchitectureReport $report)
+    public function __construct(private readonly ArchitectureReport $report, private readonly CoreTranslator $translator = new CoreTranslator())
     {
         $catalog = $report->data['modules'];
         $projectCatalog = $report->data['projects'];
@@ -128,7 +129,7 @@ final class ModuleInspectionPresentation
             $complete = $incoming ? ($this->report->presentation['module_inspection']['configuration'][$class]['references_complete'] ?? false) : $view['configuration']['references_complete'];
             // Completeness belongs to the source, not the selected target or unrelated modules.
             $complete = $this->report->data['complete'] && $complete;
-            $evidence = $isObserved ? ($isDeclared ? 'Declared + Observed' : 'Observed without declaration') : ($complete ? 'Declared only' : 'Declared; observation not verified');
+            $evidence = $isObserved ? ($isDeclared ? $this->translator->text('cli.inspect.evidence.both') : $this->translator->text('cli.inspect.evidence.observed')) : ($complete ? $this->translator->text('cli.inspect.evidence.declared') : $this->translator->text('cli.inspect.evidence.unverified'));
             $rows[] = ['class' => $class, 'label' => $this->label($class), 'evidence' => $evidence, 'problem' => $isObserved && !$isDeclared];
         }
         usort($rows, static fn (array $a, array $b): int => [$a['label'], $a['class']] <=> [$b['label'], $b['class']]);

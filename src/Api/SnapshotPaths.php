@@ -24,6 +24,10 @@ final class SnapshotPaths
     {
         if (!\array_key_exists($path, $this->paths)) {
             $absolute = str_contains($path, "\0") ? false : realpath($path);
+            if (!str_contains($path, "\0") && is_link($path)) {
+                $parent = realpath(\dirname($path));
+                $absolute = false === $parent ? false : FilesystemPath::directoryPrefix($parent).basename($path);
+            }
             $absolute = false === $absolute ? '' : FilesystemPath::normalize($absolute);
             $relative = match (true) {
                 null === $this->root || '' === $absolute => '',

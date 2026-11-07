@@ -29,7 +29,7 @@ deptrac:
         Architecture: [Module, Project, Presentation, I18n]
         Module: [Architecture, Project, I18n]
         Project: [Architecture, Module, I18n]
-        Kernel: [Module, Presentation]
+        Kernel: [Module, Presentation, I18n]
         Routing: [Module, Project]
         DependencyInjection: [Architecture, Module, Project, Kernel, Routing, Console, Doctor]
         Console: [Api, Architecture, DependencyInjection, Doctor, Presentation, I18n]

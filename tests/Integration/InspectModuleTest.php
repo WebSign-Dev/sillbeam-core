@@ -208,7 +208,7 @@ final class InspectModuleTest extends TestCase
 
     public function testUnavailableCatalogExplainsBlockersInsteadOfClaimingUnknownModule(): void
     {
-        $this->source->write('src/Broken.php', '<?php class {');
+        $this->source->write('src/Module/Broken/Broken.php', '<?php class {');
         $tester = $this->inspect('billing');
         self::assertSame(2, $tester->getStatusCode());
         self::assertStringContainsString('Module catalog unavailable', $tester->getDisplay());

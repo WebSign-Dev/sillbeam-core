@@ -309,14 +309,14 @@ final class DiagnosticCommunicationTest extends TestCase
 
     public function testFatalParseRecoveryIsConcreteAndDoesNotInventFollowUpFindings(): void
     {
-        $this->source->write('src/Broken.php', '<?php class {');
+        $this->source->write('src/Module/Broken/Broken.php', '<?php class {');
         $analysis = $this->analyze();
         $collection = DiagnosticCollection::fromAnalysis($analysis);
         self::assertSame(1, $collection->findingCount());
         self::assertStringContainsString('Analysis incomplete', $collection->diagnoses[0]->explanation);
-        self::assertSame([$this->source->directory.'/src/Broken.php'], $collection->diagnoses[0]->resolutions[0]->files);
+        self::assertSame([$this->source->directory.'/src/Module/Broken/Broken.php'], $collection->diagnoses[0]->resolutions[0]->files);
         self::assertStringContainsString($analysis->findings[0]->message, $collection->diagnoses[0]->explanation);
-        $this->source->php('src/Broken.php', 'final class Broken {}');
+        $this->source->php('src/Module/Broken/Broken.php', 'final class Broken {}');
         self::assertSame([], $this->freshRules());
     }
 

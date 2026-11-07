@@ -7,6 +7,7 @@ namespace Sillbeam\Core\Architecture\Console;
 use Sillbeam\Core\Architecture\ArchitectureAnalysisResult;
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\Diagnostic\DiagnosticContext;
+use Sillbeam\Core\I18n\CoreError;
 
 /**
  * Queries the existing report catalog, direct edges and findings for one module.
@@ -75,12 +76,15 @@ final readonly class ModuleInspection
         $matches = array_values(array_filter($this->report->data['modules'], fn (array $module): bool => $this->matches($module, $identifier) && (null === $project || 'shared' === $module['scope'] || $module['project'] === $project['class'])));
         if ([] === $matches) {
             $unavailable = !$this->report->data['complete'];
-            throw new \InvalidArgumentException($unavailable ? 'Module catalog unavailable or incomplete; cannot determine whether "'.$identifier.'" exists in this context.' : 'Unknown module: '.$identifier.(null === $project ? '' : ' in Project '.$project['id']).'. Use a module ID or descriptor class.');
+            if ($unavailable || null === $project) {
+                throw CoreError::create(\InvalidArgumentException::class, $unavailable ? 'cli.inspect.catalog_unknown' : 'cli.inspect.module_unknown', ['id' => $identifier]);
+            }
+            throw CoreError::create(\InvalidArgumentException::class, 'cli.inspect.project_module_unknown', ['id' => $identifier, 'project' => $project['id']]);
         }
         if (1 !== \count($matches)) {
             $candidates = array_map(static fn (array $module): string => $module['class'].' ('.$module['scope'].', owner: '.($module['project'] ?? 'none').')', $matches);
             sort($candidates, \SORT_STRING);
-            throw new \InvalidArgumentException('Ambiguous module: '.$identifier.'. Use --project to select an owner, or the exact descriptor class. Candidates: '.implode('; ', $candidates));
+            throw CoreError::create(\InvalidArgumentException::class, 'cli.inspect.ambiguous_module', ['id' => $identifier, 'candidates' => implode('; ', $candidates)]);
         }
         $module = $matches[0];
         $active = $module['active'];
@@ -147,7 +151,7 @@ final readonly class ModuleInspection
         if (1 !== \count($matches)) {
             $candidates = array_column($matches, 'class');
             sort($candidates, \SORT_STRING);
-            throw new \InvalidArgumentException(([] === $matches ? 'Unknown Project: ' : 'Ambiguous Project: ').$identifier.'. Use a Project ID or descriptor class. Candidates: '.implode('; ', $candidates));
+            throw CoreError::create(\InvalidArgumentException::class, [] === $matches ? 'cli.inspect.project_unknown' : 'cli.inspect.project_ambiguous', ['id' => $identifier, 'candidates' => implode('; ', $candidates)]);
         }
 
         return $matches[0];

@@ -116,8 +116,8 @@ final class CoreLiveApiTest extends TestCase
         self::assertSame([], json_decode($json, true, flags: \JSON_THROW_ON_ERROR)['diagnostics']['findings']);
 
         [$legacyCode, $legacyJson] = $this->runCommand('sillbeam:architecture', ['--format' => 'json']);
-        self::assertSame(2, $legacyCode);
-        self::assertSame('source.parse', json_decode($legacyJson, true, flags: \JSON_THROW_ON_ERROR)['findings'][0]['rule']);
+        self::assertSame(0, $legacyCode);
+        self::assertSame([], json_decode($legacyJson, true, flags: \JSON_THROW_ON_ERROR)['findings']);
     }
 
     public function testOutsideCatalogPathYieldsPartialExportWithoutInventingPaths(): void

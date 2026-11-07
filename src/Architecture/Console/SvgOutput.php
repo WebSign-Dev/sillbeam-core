@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture\Console;
 
+use Sillbeam\Core\I18n\CoreError;
+
 /** @internal Publishes complete rendered SVG using same-directory atomic filesystem operations. */
 final class SvgOutput
 {
@@ -16,15 +18,15 @@ final class SvgOutput
     public function destination(string $path, bool $force): string
     {
         if ('' === trim($path) || preg_match('/[\x00-\x1f\x7f]/', $path)) {
-            throw new \RuntimeException('Supply a nonempty SVG output path without control characters.');
+            throw CoreError::create(\RuntimeException::class, 'cli.svg.path');
         }
         $directory = \dirname($path);
         if (!@is_dir($directory) && !@mkdir($directory, 0777, true) && !@is_dir($directory)) {
-            throw new \RuntimeException('Cannot create SVG output directory: '.$directory);
+            throw CoreError::create(\RuntimeException::class, 'cli.svg.directory', ['path' => $directory]);
         }
         $parent = @realpath($directory);
         if (false === $parent || !@is_dir($parent) || !@is_writable($parent)) {
-            throw new \RuntimeException('SVG output parent directory must be writable: '.\dirname($path));
+            throw CoreError::create(\RuntimeException::class, 'cli.svg.writable', ['path' => \dirname($path)]);
         }
         $destination = $parent.\DIRECTORY_SEPARATOR.basename($path);
         $this->check($destination, $force);
@@ -44,16 +46,16 @@ final class SvgOutput
     {
         $temporary = @tempnam(\dirname($destination), '.sillbeam-svg-');
         if (false === $temporary) {
-            throw new \RuntimeException('Cannot create temporary SVG output.');
+            throw CoreError::create(\RuntimeException::class, 'cli.svg.temporary');
         }
         try {
             if (\strlen($svg) !== @file_put_contents($temporary, $svg)) {
-                throw new \RuntimeException('Cannot write complete SVG output.');
+                throw CoreError::create(\RuntimeException::class, 'cli.svg.write');
             }
             $this->check($destination, $force);
             $published = $force ? @rename($temporary, $destination) : @link($temporary, $destination);
             if (!$published) {
-                throw new \RuntimeException('Cannot publish SVG atomically. The destination may have appeared concurrently; use --force only for intentional replacement.');
+                throw CoreError::create(\RuntimeException::class, 'cli.svg.publish');
             }
         } finally {
             if (is_file($temporary)) {
@@ -66,10 +68,10 @@ final class SvgOutput
     {
         clearstatcache(true, $destination);
         if (@is_link($destination) || (@file_exists($destination) && !@is_file($destination))) {
-            throw new \RuntimeException('SVG destination must be a regular file, never a directory or symbolic link: '.$destination);
+            throw CoreError::create(\RuntimeException::class, 'cli.svg.regular', ['path' => $destination]);
         }
         if (!$force && @file_exists($destination)) {
-            throw new \RuntimeException('SVG destination already exists. Use --force to replace it intentionally: '.$destination);
+            throw CoreError::create(\RuntimeException::class, 'cli.svg.exists', ['path' => $destination]);
         }
     }
 }
