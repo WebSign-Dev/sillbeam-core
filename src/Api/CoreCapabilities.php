@@ -19,7 +19,7 @@ final readonly class CoreCapabilities implements \JsonSerializable
     public function jsonSerialize(): array
     {
         $profiles = [];
-        foreach (CoreDataProfile::cases() as $profile) {
+        foreach (CoreDataProvider::supportedProfiles() as $profile) {
             $profiles[$profile->value] = [
                 'schema_versions' => [CoreDataRequest::SCHEMA_VERSION],
                 'default_schema_version' => CoreDataRequest::SCHEMA_VERSION,
@@ -35,7 +35,7 @@ final readonly class CoreCapabilities implements \JsonSerializable
             'default_locale' => CoreTranslator::DEFAULT_LOCALE,
             'available_locales' => CoreTranslator::locales(),
             'profiles' => $profiles,
-            'operations' => ['architecture', 'doctor', 'graph', 'inspect_module', 'inspect_sources'],
+            'operations' => ['architecture', 'doctor', 'graph', 'inspect_module'],
         ];
     }
 }

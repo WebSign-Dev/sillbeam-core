@@ -98,8 +98,7 @@
         }
       },
       "required": [
-        "live",
-        "analysis"
+        "live"
       ],
       "additionalProperties": false
     },

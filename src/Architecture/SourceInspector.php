@@ -23,6 +23,10 @@ final class SourceInspector
     /** @var array<string, list<string>> */
     private array $prunedPaths = [];
 
+    public function __construct(private readonly bool $limitParseFailuresToDiscoveryRoots = false)
+    {
+    }
+
     /**
      * Reads and parses visible PHP files in sorted order, caching the result for these options.
      *
@@ -86,19 +90,35 @@ final class SourceInspector
             try {
                 $files[$path] = $parser->parse($path);
             } catch (\PhpParser\Error $error) {
+                if (!$this->requiresSource($options, $path)) {
+                    continue;
+                }
                 $failures->add(ArchitectureFinding::fromMessage('source.parse', new CoreMessage('finding.source.parse', ['path' => $path, 'error' => CoreError::message($error)]), ['file' => $path, 'line' => $error->getStartLine()], 'fatal'));
                 $cause ??= $error;
             } catch (ArchitectureValidationException $error) {
+                $retained = false;
                 foreach ($error->result->findings as $finding) {
+                    if ('source.read' === $finding->rule && !$this->requiresSource($options, $path)) {
+                        continue;
+                    }
                     $failures->add($finding);
+                    $retained = true;
                 }
-                $cause ??= $error->getPrevious();
+                if ($retained) {
+                    $cause ??= $error->getPrevious();
+                }
             }
         }
         (new ArchitectureAnalysisResult($failures->all(), cause: $cause))->throwIfInvalid();
         $this->prunedPaths[$key] = array_values($pruned);
 
         return $this->indexes[$key] = $files;
+    }
+
+    private function requiresSource(DiscoveryOptions $options, string $path): bool
+    {
+        return !$this->limitParseFailuresToDiscoveryRoots
+            || array_any([...$options->moduleRoots, ...$options->projectRoots], static fn (DiscoveryRoot $root): bool => $root->contains($path));
     }
 
     /** @return list<string> */

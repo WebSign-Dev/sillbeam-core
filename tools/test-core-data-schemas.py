@@ -9,6 +9,7 @@ from referencing import Registry, Resource
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--capabilities-stdin", action="store_true", help="also validate capabilities JSON from stdin")
+parser.add_argument("--live", type=Path, action="append", default=[], help="also validate a generated Live document")
 args = parser.parse_args()
 
 root = Path(__file__).resolve().parents[1] / "docs/reference/core-data"
@@ -37,6 +38,10 @@ for schema in schemas.values():
 for name, file in (("live", "live.de.json"), ("analysis", "analysis.json"), ("capabilities", "capabilities.json")):
     validator = Draft202012Validator(schemas[name], registry=registry, format_checker=Draft202012Validator.FORMAT_CHECKER)
     validator.validate(json.loads((root / "examples" / file).read_text()))
+    if name == "live":
+        for path in args.live:
+            validator.validate(json.loads(path.read_text()))
+            print(f"Generated Live document validated: {path.name}")
     if name == "capabilities" and args.capabilities_stdin:
         validator.validate(json.load(sys.stdin))
         print("Generated capabilities validated")

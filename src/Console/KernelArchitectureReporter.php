@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Console;
 
+use Sillbeam\Core\Api\CoreDataConfiguration;
 use Sillbeam\Core\Architecture\ArchitectureAnalyzer;
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\DiscoveryOptionsResolver;
@@ -27,6 +28,13 @@ final class KernelArchitectureReporter
      * @throws \LogicException if kernel preparation, bundle registration or configuration is incompatible
      */
     public function report(KernelInterface $kernel): ArchitectureReport
+    {
+        $input = $this->configuration($kernel);
+
+        return ArchitectureReport::fromAnalysis((new ArchitectureAnalyzer())->analyze($input->options, $input->config), $input->config, $input->projectDir);
+    }
+
+    public function configuration(KernelInterface $kernel): CoreDataConfiguration
     {
         $kernel = clone $kernel;
         // Symfony has no public API for preparing only the uncompiled configuration.
@@ -65,7 +73,7 @@ final class KernelArchitectureReporter
             }
         }
 
-        return ArchitectureReport::fromAnalysis((new ArchitectureAnalyzer())->analyze($options, $config), $config, $kernel->getProjectDir());
+        return new CoreDataConfiguration($options, $kernel->getProjectDir(), $config);
     }
 
     private function initializeFreshBundles(KernelInterface $kernel): void

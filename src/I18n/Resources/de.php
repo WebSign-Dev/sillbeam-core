@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 return [
+    'api.capabilities_format' => 'Das Ausgabeformat für Capabilities muss json sein.',
+    'api.export_failed' => 'Der Core-Datenexport ist fehlgeschlagen.',
+    'api.invalid_schema_option' => 'Die Schema-Version muss eine Ganzzahl sein.',
+    'api.analysis_unavailable' => 'Die Architekturanalyse konnte nicht ausgeführt werden.',
+    'api.path_unavailable' => 'Einige Belege konnten nicht mit einem verifizierten projektbezogenen Pfad ausgegeben werden.',
     'api.invalid_json_value' => 'Ein unveränderlicher JSON-Wert wird erwartet.',
     'api.locale_not_selectable' => 'Für Profil „{profile}“ kann keine Sprache gewählt werden.',
     'api.profile_sections' => 'Ungültige Abschnitte für Profil „{profile}“.',

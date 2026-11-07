@@ -39,6 +39,35 @@ final readonly class ArchitectureReport
      */
     public static function fromAnalysis(ArchitectureAnalysisResult $analysis, array $config = [], ?string $projectDir = null): self
     {
+        $catalog = self::catalog($analysis, $config);
+
+        return new self([
+            'schema_version' => 1,
+            'status' => !$analysis->isComplete() ? 'unavailable' : ($analysis->isValid() ? 'valid' : 'violations'),
+            'valid' => $analysis->isValid(), 'complete' => $analysis->isComplete(),
+            'findings' => array_map(static function (ArchitectureFinding $finding): array {
+                $data = get_object_vars($finding);
+                if (null !== ($suggestion = $finding->suggestion())) {
+                    $data['context']['suggestion'] = $suggestion;
+                }
+
+                return $data;
+            }, $analysis->findings),
+            ...$catalog,
+        ], ArchitecturePresentation::fromAnalysis($analysis, $projectDir) + ['module_inspection' => ModuleInspection::metadata($analysis, $config)]);
+    }
+
+    /**
+     * Shared scalar catalog from the validated graph and available discovery evidence.
+     *
+     * @internal
+     *
+     * @param array<string, mixed> $config
+     *
+     * @return array{modules: list<array<string, mixed>>, projects: list<array<string, mixed>>}
+     */
+    public static function catalog(ArchitectureAnalysisResult $analysis, array $config): array
+    {
         $graph = $analysis->architecture;
         $catalog = $graph->modules ?? $analysis->discovery->modules ?? [];
         $projects = $graph->projects ?? $analysis->discovery->projects ?? [];
@@ -80,20 +109,7 @@ final readonly class ArchitectureReport
             $projectData[] = $data;
         }
 
-        return new self([
-            'schema_version' => 1,
-            'status' => !$analysis->isComplete() ? 'unavailable' : ($analysis->isValid() ? 'valid' : 'violations'),
-            'valid' => $analysis->isValid(), 'complete' => $analysis->isComplete(),
-            'findings' => array_map(static function (ArchitectureFinding $finding): array {
-                $data = get_object_vars($finding);
-                if (null !== ($suggestion = $finding->suggestion())) {
-                    $data['context']['suggestion'] = $suggestion;
-                }
-
-                return $data;
-            }, $analysis->findings),
-            'modules' => $modules, 'projects' => $projectData,
-        ], ArchitecturePresentation::fromAnalysis($analysis, $projectDir) + ['module_inspection' => ModuleInspection::metadata($analysis, $config)]);
+        return ['modules' => $modules, 'projects' => $projectData];
     }
 
     /**

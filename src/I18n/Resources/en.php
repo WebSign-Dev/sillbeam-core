@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 return [
+    'api.capabilities_format' => 'The capabilities output format must be json.',
+    'api.export_failed' => 'The Core Data export failed.',
+    'api.invalid_schema_option' => 'The schema version must be an integer.',
+    'api.analysis_unavailable' => 'The architecture analysis could not run.',
+    'api.path_unavailable' => 'Some evidence could not be exported as a verified project-relative path.',
     'api.invalid_json_value' => 'Expected an immutable JSON value.',
     'api.locale_not_selectable' => 'Profile "{profile}" does not accept a locale.',
     'api.profile_sections' => 'Invalid sections for profile "{profile}".',
