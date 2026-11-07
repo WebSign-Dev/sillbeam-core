@@ -12,10 +12,8 @@ final class ArchitectureFindings
 
     public function add(ArchitectureFinding $finding): void
     {
-        $context = $finding->context;
-        ksort($context);
-        $finding = new ArchitectureFinding($finding->rule, $finding->message, $context, $finding->severity);
-        $this->findings[serialize($finding)] = $finding;
+        $finding = $finding->withSortedContext();
+        $this->findings[serialize([$finding->rule, $finding->message, $finding->context, $finding->severity])] = $finding;
     }
 
     public function hasFatal(): bool

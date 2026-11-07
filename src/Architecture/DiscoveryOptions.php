@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture;
 
+use Sillbeam\Core\I18n\CoreError;
+
 /**
  * Immutable input paths, PSR-4 namespaces and exclusion patterns for architecture analysis.
  *
@@ -53,7 +55,7 @@ final readonly class DiscoveryOptions
         $namespaces = [];
         foreach ($this->roots() as $discoveryRoot) {
             if (isset($namespaces[$discoveryRoot->path]) && $namespaces[$discoveryRoot->path] !== $discoveryRoot->namespace) {
-                throw new \LogicException('Conflicting discovery namespaces for '.$discoveryRoot->path);
+                throw CoreError::create(\LogicException::class, 'error.discovery.conflict', ['path' => $discoveryRoot->path]);
             }
             $namespaces[$discoveryRoot->path] = $discoveryRoot->namespace;
         }
@@ -106,6 +108,6 @@ final readonly class DiscoveryOptions
                 return rtrim($root->namespace.('' === $relative ? '' : str_replace('/', '\\', $relative)), '\\');
             }
         }
-        throw new \LogicException('Directory has no configured discovery namespace: '.$directory);
+        throw CoreError::create(\LogicException::class, 'error.discovery.no_namespace', ['path' => $directory]);
     }
 }

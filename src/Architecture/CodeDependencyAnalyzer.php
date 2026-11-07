@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Architecture;
 
 use Composer\Autoload\ClassLoader;
+use Sillbeam\Core\I18n\CoreMessage;
 use Sillbeam\Core\Module\ModuleDefinition;
 
 /**
@@ -73,7 +74,7 @@ final readonly class CodeDependencyAnalyzer
             foreach ($file->classes as $class) {
                 $key = strtolower($class);
                 if (isset($symbols[$key])) {
-                    throw ArchitectureValidationException::fatal('source.duplicate_class', 'Duplicate class in Sillbeam source index: '.$class, ['class' => $class, 'file' => $file->path, 'module' => $owner->class]);
+                    throw ArchitectureValidationException::fatalMessage('source.duplicate_class', new CoreMessage('finding.source.duplicate_class', ['class' => $class]), ['class' => $class, 'file' => $file->path, 'module' => $owner->class]);
                 }
                 $symbols[$key] = $owner;
             }
@@ -106,7 +107,7 @@ final readonly class CodeDependencyAnalyzer
                 $locationKey = $key.':'.$reference['line'];
                 if (!$resolved[$key] && !isset($missing[$locationKey])) {
                     $missing[$locationKey] = true;
-                    $findings->add(new ArchitectureFinding('code.unknown_class', 'Cannot resolve referenced class "'.$reference['class'].'".', [
+                    $findings->add(ArchitectureFinding::fromMessage('code.unknown_class', new CoreMessage('finding.code.unknown_class', ['class' => $reference['class']]), [
                         ...$context, 'class' => $reference['class'], 'file' => $file->path, 'line' => $reference['line'],
                     ]));
                 }
@@ -142,14 +143,14 @@ final readonly class CodeDependencyAnalyzer
                 if (!isset($active[$source->class])) {
                     continue;
                 }
-                $prefix = \sprintf('%s:%d: Module "%s" uses "%s" from module "%s": ', $file->path, $reference['line'], $source->id, $reference['class'], $target->id);
+                $referenceText = ['file' => $file->path, 'line' => $reference['line'], 'source' => $source->id, 'class' => $reference['class'], 'target' => $target->id];
                 $context = ['module' => $source->class, 'project' => $source->projectClass, 'target' => $target->class, 'class' => $reference['class'], 'file' => $file->path, 'line' => $reference['line']];
                 if ($target->isPrivate() && (!$source->isPrivate() || $source->projectClass !== $target->projectClass)) {
-                    $findings->add(new ArchitectureFinding('code.private', $prefix.'access to this private module is forbidden.', $context));
+                    $findings->add(ArchitectureFinding::fromMessage('code.private', new CoreMessage('finding.code.private', $referenceText), $context));
                 } elseif (!isset($active[$target->class])) {
-                    $findings->add(new ArchitectureFinding('code.inactive', $prefix.'references an inactive module.', $context));
+                    $findings->add(ArchitectureFinding::fromMessage('code.inactive', new CoreMessage('finding.code.inactive', $referenceText), $context));
                 } elseif (!\in_array($target->class, $source->dependencies, true)) {
-                    $findings->add(new ArchitectureFinding('code.undeclared_dependency', $prefix.'does not declare a direct dependency.', $context));
+                    $findings->add(ArchitectureFinding::fromMessage('code.undeclared_dependency', new CoreMessage('finding.code.undeclared_dependency', $referenceText), $context));
                 }
             }
         }

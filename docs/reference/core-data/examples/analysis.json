@@ -1,0 +1,457 @@
+{
+  "document_type": "sillbeam_core_data",
+  "schema_version": 1,
+  "profile": "analysis",
+  "metadata": {
+    "core_version": "0.4.0",
+    "analysis_run_id": "8d13e2c5-fd38-4b1c-a73c-8fa808514901",
+    "analyzed_at": "2026-11-07T13:00:00Z",
+    "duration_ms": 420,
+    "php_version": "8.4.0",
+    "symfony_version": "7.4.0",
+    "architecture_fingerprint": "sha256:v1:b9036498fc55ff50224171408366a8ab4efca89be3a2508ae7d50a243ab72152",
+    "fingerprint_version": 1
+  },
+  "i18n": {
+    "default_locale": "en",
+    "available_locales": [
+      "en",
+      "de"
+    ],
+    "included_locales": [
+      "en",
+      "de"
+    ],
+    "requested_locale": null,
+    "fallbacks": []
+  },
+  "analysis": {
+    "status": "violations",
+    "valid": false,
+    "complete": true
+  },
+  "export": {
+    "status": "complete"
+  },
+  "completeness": {
+    "architecture": "complete",
+    "diagnostics": "complete",
+    "references": "complete",
+    "graph": "complete",
+    "source_inventory": "complete",
+    "doctor": "complete"
+  },
+  "summary": {
+    "module_count": 2,
+    "project_count": 0,
+    "finding_count": 1,
+    "diagnosis_count": 1,
+    "module_reference_count": 1,
+    "application_reference_count": 1
+  },
+  "architecture": {
+    "modules": [
+      {
+        "id": "billing",
+        "class": "App\\Module\\Billing\\BillingModule",
+        "description": "Billing module",
+        "namespace": "App\\Module\\Billing",
+        "scope": "shared",
+        "project": null,
+        "directory": "src/Module/Billing",
+        "descriptor": "src/Module/Billing/BillingModule.php",
+        "enabled": true,
+        "active": null,
+        "inactive_reason": "unknown",
+        "declared_dependencies": [],
+        "observed_dependencies": [
+          "App\\Module\\Catalog\\CatalogModule"
+        ],
+        "activation_reasons": null,
+        "controllers": [],
+        "entities": [],
+        "configuration": {
+          "key": "shared:billing",
+          "override_source": null,
+          "enabled_override": null
+        },
+        "project_states": []
+      },
+      {
+        "id": "catalog",
+        "class": "App\\Module\\Catalog\\CatalogModule",
+        "description": "Catalog module",
+        "namespace": "App\\Module\\Catalog",
+        "scope": "shared",
+        "project": null,
+        "directory": "src/Module/Catalog",
+        "descriptor": "src/Module/Catalog/CatalogModule.php",
+        "enabled": true,
+        "active": null,
+        "inactive_reason": "unknown",
+        "declared_dependencies": [],
+        "observed_dependencies": [],
+        "activation_reasons": null,
+        "controllers": [],
+        "entities": [],
+        "configuration": {
+          "key": "shared:catalog",
+          "override_source": null,
+          "enabled_override": null
+        },
+        "project_states": []
+      }
+    ],
+    "projects": []
+  },
+  "diagnostics": {
+    "findings": [
+      {
+        "index": 0,
+        "rule": "code.undeclared_dependency",
+        "severity": "error",
+        "message": "Module billing uses an undeclared module dependency.",
+        "context": {
+          "module": "App\\Module\\Billing\\BillingModule",
+          "target": "App\\Module\\Catalog\\CatalogModule",
+          "file": "src/Module/Billing/BillingService.php",
+          "line": 42
+        },
+        "location": {
+          "path": "src/Module/Billing/BillingService.php",
+          "line": 42,
+          "column": null
+        },
+        "diagnosis_id": "D1",
+        "translations": {
+          "en": {
+            "message": "Module billing uses an undeclared module dependency.",
+            "hint": "Declare the direct dependency in the module descriptor."
+          },
+          "de": {
+            "message": "Das Modul billing verwendet eine nicht deklarierte Modulabhängigkeit.",
+            "hint": "Deklariere die direkte Abhängigkeit im Modul-Descriptor."
+          }
+        }
+      }
+    ],
+    "diagnoses": [
+      {
+        "id": "D1",
+        "correlation_key": null,
+        "correlation_version": null,
+        "basis": "observed_reference",
+        "severity": "error",
+        "rule_codes": [
+          "code.undeclared_dependency"
+        ],
+        "finding_indexes": [
+          0
+        ],
+        "modules": [
+          "App\\Module\\Billing\\BillingModule",
+          "App\\Module\\Catalog\\CatalogModule"
+        ],
+        "descriptors": {
+          "App\\Module\\Billing\\BillingModule": "src/Module/Billing/BillingModule.php",
+          "App\\Module\\Catalog\\CatalogModule": "src/Module/Catalog/CatalogModule.php"
+        },
+        "details": [
+          {
+            "finding_index": 0,
+            "caution": false,
+            "translations": {
+              "en": {
+                "problem": "A module boundary is crossed without a declared dependency.",
+                "impact": "The actual dependency is not fully declared."
+              },
+              "de": {
+                "problem": "Eine Modulgrenze wird ohne deklarierte Abhängigkeit überschritten.",
+                "impact": "Die tatsächliche Abhängigkeit ist nicht vollständig deklariert."
+              }
+            }
+          }
+        ],
+        "translations": {
+          "en": {
+            "title": "Undeclared module dependency",
+            "category": "Module dependencies",
+            "problem": "Billing uses Catalog without declaring it.",
+            "impact": "Declared and observed architecture differ.",
+            "caution": null
+          },
+          "de": {
+            "title": "Nicht deklarierte Modulabhängigkeit",
+            "category": "Modulabhängigkeiten",
+            "problem": "Billing verwendet Catalog ohne entsprechende Deklaration.",
+            "impact": "Deklarierte und beobachtete Architektur unterscheiden sich.",
+            "caution": null
+          }
+        },
+        "resolutions": [
+          {
+            "id": "R1",
+            "kind": "technical",
+            "files": [
+              "src/Module/Billing/BillingModule.php"
+            ],
+            "configuration": [],
+            "translations": {
+              "en": {
+                "steps": [
+                  "Review the dependency direction.",
+                  "Declare the direct dependency in the Billing descriptor."
+                ]
+              },
+              "de": {
+                "steps": [
+                  "Prüfe die benötigte Abhängigkeitsrichtung.",
+                  "Deklariere die direkte Modulabhängigkeit im Billing-Descriptor."
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "references": {
+    "module": [
+      {
+        "id": "MR1",
+        "source_module": "App\\Module\\Billing\\BillingModule",
+        "target_module": "App\\Module\\Catalog\\CatalogModule",
+        "target_class": "App\\Module\\Catalog\\CatalogService",
+        "source_file": "src/Module/Billing/BillingService.php",
+        "source_line": 42,
+        "declared": false,
+        "observed": true
+      }
+    ],
+    "application": [
+      {
+        "id": "AR1",
+        "source_module": "App\\Module\\Billing\\BillingModule",
+        "target_class": "App\\Service\\Formatter",
+        "source_file": "src/Module/Billing/BillingService.php",
+        "source_line": 51,
+        "target_file": "src/Service/Formatter.php",
+        "classification": "informational"
+      }
+    ]
+  },
+  "errors": [],
+  "extensions": {},
+  "graph": {
+    "validation_state": "evidence_only",
+    "nodes": [
+      {
+        "id": "App\\Module\\Billing\\BillingModule",
+        "type": "module",
+        "scope": "shared",
+        "project": null,
+        "state": "unknown",
+        "group_id": "shared"
+      },
+      {
+        "id": "App\\Module\\Catalog\\CatalogModule",
+        "type": "module",
+        "scope": "shared",
+        "project": null,
+        "state": "unknown",
+        "group_id": "shared"
+      }
+    ],
+    "edges": [
+      {
+        "id": "GE1",
+        "source": "App\\Module\\Billing\\BillingModule",
+        "target": "App\\Module\\Catalog\\CatalogModule",
+        "type": "observed_module_reference",
+        "declared": false,
+        "observed": true,
+        "reference_ids": [
+          "MR1"
+        ]
+      }
+    ],
+    "groups": [
+      {
+        "id": "shared",
+        "type": "shared_scope",
+        "owner": null,
+        "translations": {
+          "en": {
+            "label": "Shared modules"
+          },
+          "de": {
+            "label": "Gemeinsame Module"
+          }
+        }
+      }
+    ]
+  },
+  "source_inventory": {
+    "roots": [
+      {
+        "id": "application_src",
+        "path": "src/",
+        "namespace": "App\\"
+      }
+    ],
+    "summary": {
+      "directory_count": 5,
+      "file_count": 6,
+      "php_file_count": 6,
+      "symbol_count": 6
+    },
+    "directories": [
+      "src/",
+      "src/Module/",
+      "src/Module/Billing/",
+      "src/Module/Catalog/",
+      "src/Service/"
+    ],
+    "files": [
+      {
+        "path": "src/Kernel.php",
+        "extension": "php",
+        "size_bytes": 1200,
+        "content_hash": null,
+        "ownership": "application",
+        "module_class": null,
+        "project_class": null,
+        "parse_status": "parsed",
+        "symbols": [
+          {
+            "name": "App\\Kernel",
+            "type": "class"
+          }
+        ]
+      },
+      {
+        "path": "src/Module/Billing/BillingModule.php",
+        "extension": "php",
+        "size_bytes": 1300,
+        "content_hash": null,
+        "ownership": "module",
+        "module_class": "App\\Module\\Billing\\BillingModule",
+        "project_class": null,
+        "parse_status": "parsed",
+        "symbols": [
+          {
+            "name": "App\\Module\\Billing\\BillingModule",
+            "type": "class"
+          }
+        ]
+      },
+      {
+        "path": "src/Module/Billing/BillingService.php",
+        "extension": "php",
+        "size_bytes": 1400,
+        "content_hash": null,
+        "ownership": "module",
+        "module_class": "App\\Module\\Billing\\BillingModule",
+        "project_class": null,
+        "parse_status": "parsed",
+        "symbols": [
+          {
+            "name": "App\\Module\\Billing\\BillingService",
+            "type": "class"
+          }
+        ]
+      },
+      {
+        "path": "src/Module/Catalog/CatalogModule.php",
+        "extension": "php",
+        "size_bytes": 1500,
+        "content_hash": null,
+        "ownership": "module",
+        "module_class": "App\\Module\\Catalog\\CatalogModule",
+        "project_class": null,
+        "parse_status": "parsed",
+        "symbols": [
+          {
+            "name": "App\\Module\\Catalog\\CatalogModule",
+            "type": "class"
+          }
+        ]
+      },
+      {
+        "path": "src/Module/Catalog/CatalogService.php",
+        "extension": "php",
+        "size_bytes": 1600,
+        "content_hash": null,
+        "ownership": "module",
+        "module_class": "App\\Module\\Catalog\\CatalogModule",
+        "project_class": null,
+        "parse_status": "parsed",
+        "symbols": [
+          {
+            "name": "App\\Module\\Catalog\\CatalogService",
+            "type": "class"
+          }
+        ]
+      },
+      {
+        "path": "src/Service/Formatter.php",
+        "extension": "php",
+        "size_bytes": 1700,
+        "content_hash": null,
+        "ownership": "application",
+        "module_class": null,
+        "project_class": null,
+        "parse_status": "parsed",
+        "symbols": [
+          {
+            "name": "App\\Service\\Formatter",
+            "type": "class"
+          }
+        ]
+      }
+    ],
+    "excluded_paths": []
+  },
+  "doctor": {
+    "status": "verified",
+    "exit_code": 0,
+    "summary": {
+      "verified": 2,
+      "action_required": 0,
+      "not_verified": 0
+    },
+    "checks": [
+      {
+        "index": 0,
+        "id": "bundle.registration",
+        "status": "verified",
+        "translations": {
+          "en": {
+            "description": "Bundle registration",
+            "detail": ""
+          },
+          "de": {
+            "description": "Bundle-Registrierung",
+            "detail": ""
+          }
+        }
+      },
+      {
+        "index": 1,
+        "id": "console.adapter",
+        "status": "verified",
+        "translations": {
+          "en": {
+            "description": "Console adapter",
+            "detail": ""
+          },
+          "de": {
+            "description": "Console-Adapter",
+            "detail": ""
+          }
+        }
+      }
+    ],
+    "errors": []
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getsillbeam.websign.de/schemas/core-data-live.v1.schema.json",
+  "title": "Sillbeam Core Data live v1",
+  "type": "object",
+  "properties": {
+    "document_type": {
+      "const": "sillbeam_core_data"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "profile": {
+      "const": "live"
+    },
+    "metadata": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/metadata"
+    },
+    "i18n": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/i18n"
+    },
+    "analysis": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/analysisStatus"
+    },
+    "export": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/exportStatus"
+    },
+    "completeness": {
+      "type": "object",
+      "properties": {
+        "architecture": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_collected"
+          ]
+        },
+        "diagnostics": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_collected"
+          ]
+        },
+        "references": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_collected"
+          ]
+        }
+      },
+      "required": [
+        "architecture",
+        "diagnostics",
+        "references"
+      ],
+      "additionalProperties": false
+    },
+    "summary": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/summary"
+    },
+    "architecture": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/architecture"
+    },
+    "diagnostics": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/diagnostics"
+    },
+    "references": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/references"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "core-data-common.v1.schema.json#/$defs/exportError"
+      }
+    },
+    "extensions": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/extensions"
+    }
+  },
+  "required": [
+    "document_type",
+    "schema_version",
+    "profile",
+    "metadata",
+    "i18n",
+    "analysis",
+    "export",
+    "completeness",
+    "summary",
+    "architecture",
+    "diagnostics",
+    "references",
+    "errors",
+    "extensions"
+  ],
+  "additionalProperties": false
+}

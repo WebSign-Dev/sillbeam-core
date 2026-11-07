@@ -8,6 +8,7 @@ use Sillbeam\Core\Architecture\ArchitectureValidationException;
 use Sillbeam\Core\Architecture\DiscoveryOptions;
 use Sillbeam\Core\Architecture\IdDeriver;
 use Sillbeam\Core\Architecture\SourceInspector;
+use Sillbeam\Core\I18n\CoreMessage;
 use Sillbeam\Core\Module\Attribute\SillbeamModule;
 use Sillbeam\Core\Project\ProjectDefinition;
 
@@ -32,7 +33,7 @@ final readonly class ModuleDiscovery
             $directory = \dirname($file);
             foreach ($projects as $project) {
                 if (str_starts_with($project->directory.'/', $directory.'/')) {
-                    throw ArchitectureValidationException::fatal('discovery.project_inside_module', 'Project cannot be inside module area: '.$project->class.' and '.$class, ['file' => $file, 'module' => $class]);
+                    throw ArchitectureValidationException::fatalMessage('discovery.project_inside_module', new CoreMessage('finding.discovery.project_inside_module', ['project' => $project->class, 'module' => $class]), ['file' => $file, 'module' => $class]);
                 }
             }
             $owner = null;
@@ -46,18 +47,18 @@ final readonly class ModuleDiscovery
                 }
             }
             if ($inProjectRoot && null === $owner) {
-                throw ArchitectureValidationException::fatal('discovery.owner_missing', 'Module "'.$class.'" has no owning project.', ['file' => $file, 'module' => $class]);
+                throw ArchitectureValidationException::fatalMessage('discovery.owner_missing', new CoreMessage('finding.discovery.owner_missing', ['class' => $class]), ['file' => $file, 'module' => $class]);
             }
             $allowed = null !== $owner;
             foreach ($options->moduleRoots as $root) {
                 $allowed = $allowed || $root->contains($file);
             }
             if (!$allowed) {
-                throw ArchitectureValidationException::fatal('discovery.module_boundary', 'Module descriptor "'.$class.'" is outside the allowed module discovery boundaries.', ['file' => $file, 'module' => $class]);
+                throw ArchitectureValidationException::fatalMessage('discovery.module_boundary', new CoreMessage('finding.discovery.module_boundary', ['class' => $class]), ['file' => $file, 'module' => $class]);
             }
             foreach ($modules as $known) {
                 if ($directory === $known->directory || str_starts_with($directory.'/', $known->directory.'/') || str_starts_with($known->directory.'/', $directory.'/')) {
-                    throw ArchitectureValidationException::fatal('discovery.module_overlap', 'Sillbeam descriptors have overlapping module areas: '.$class.' and '.$known->class, ['file' => $file, 'module' => $class]);
+                    throw ArchitectureValidationException::fatalMessage('discovery.module_overlap', new CoreMessage('finding.discovery.module_overlap', ['class' => $class, 'other' => $known->class]), ['file' => $file, 'module' => $class]);
                 }
             }
             $metadata = $this->inspector->metadata($class, $file, SillbeamModule::class);

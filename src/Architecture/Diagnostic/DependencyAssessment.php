@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture\Diagnostic;
 
+use Sillbeam\Core\I18n\CoreTranslator;
+
 /** @internal Local constraints on one hypothetical declared edge, not whole-architecture approval. */
 final readonly class DependencyAssessment
 {
@@ -28,13 +30,13 @@ final readonly class DependencyAssessment
     ) {
     }
 
-    public function resolution(): ?Resolution
+    public function resolution(CoreTranslator $translator = new CoreTranslator()): ?Resolution
     {
         if ([] !== $this->blockers || false !== $this->hasReturnPath || true !== $this->privacyAllowed || false !== $this->alreadyDeclared || null === $this->sourceDescriptor) {
             return null;
         }
 
         // Adding a dependency is always a domain decision, even if local checks pass.
-        return new Resolution('option', ['In '.$this->sourceDescriptor.', add \\'.ltrim($this->target, '\\').'::class to the SillbeamModule dependencies list if this dependency is intended. Rerun architecture analysis after the change; check which modules are active.'], [$this->sourceDescriptor]);
+        return new Resolution('option', [$translator->text('resolution.dependency.declare', ['descriptor' => $this->sourceDescriptor, 'target' => '\\'.ltrim($this->target, '\\').'::class'])], [$this->sourceDescriptor]);
     }
 }

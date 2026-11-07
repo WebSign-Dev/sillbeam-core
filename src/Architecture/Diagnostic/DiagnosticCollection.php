@@ -6,6 +6,7 @@ namespace Sillbeam\Core\Architecture\Diagnostic;
 
 use Sillbeam\Core\Architecture\ArchitectureAnalysisResult;
 use Sillbeam\Core\Architecture\ArchitectureFinding;
+use Sillbeam\Core\I18n\CoreTranslator;
 
 /** @internal Complete attribution with deterministic run-local IDs, not persistent issue numbers. */
 final readonly class DiagnosticCollection
@@ -18,13 +19,13 @@ final readonly class DiagnosticCollection
     {
     }
 
-    public static function fromAnalysis(ArchitectureAnalysisResult $analysis): self
+    public static function fromAnalysis(ArchitectureAnalysisResult $analysis, CoreTranslator $translator = new CoreTranslator()): self
     {
-        return self::fromContext($analysis->findings, DiagnosticContext::fromAnalysis($analysis));
+        return self::fromContext($analysis->findings, DiagnosticContext::fromAnalysis($analysis), $translator);
     }
 
     /** @param list<ArchitectureFinding> $findings */
-    public static function fromContext(array $findings, DiagnosticContext $context): self
+    public static function fromContext(array $findings, DiagnosticContext $context, CoreTranslator $translator = new CoreTranslator()): self
     {
         $cycles = $context->graph()->cycles();
         $groups = [];
@@ -38,7 +39,7 @@ final readonly class DiagnosticCollection
         ksort($groups, \SORT_STRING);
         // Fatal findings are actual prerequisites for reliable analysis, not a rule-code rank.
         uasort($groups, static fn (array $left, array $right): int => $right['fatal'] <=> $left['fatal']);
-        $catalog = new DiagnosticRuleCatalog($context, !array_any($findings, static fn (ArchitectureFinding $finding): bool => 'fatal' === $finding->severity));
+        $catalog = new DiagnosticRuleCatalog($context, !array_any($findings, static fn (ArchitectureFinding $finding): bool => 'fatal' === $finding->severity), $translator);
         $diagnoses = [];
         $assignments = [];
         foreach ($groups as $group) {
@@ -66,7 +67,7 @@ final readonly class DiagnosticCollection
                 $detail = $catalog->explain($finding, 'declared_cycle' === $group['basis'] ? $group['modules'] : []);
                 $details[] = $detail;
                 $location = $detail->location();
-                $paragraph = $detail->problem.(null === $location ? '' : ' Reported at '.$location.'.').' '.$detail->impact;
+                $paragraph = $detail->problem.(null === $location ? '' : $translator->text('diagnosis.context.location', ['location' => $location])).' '.$detail->impact;
                 $narrative[$paragraph] = $paragraph;
                 foreach ($detail->resolutions as $resolution) {
                     $configuration = $resolution->configuration;

@@ -9,6 +9,7 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\ParserFactory;
+use Sillbeam\Core\I18n\CoreMessage;
 use Sillbeam\Core\Module\Attribute\SillbeamModule;
 use Sillbeam\Core\Project\Attribute\SillbeamProject;
 
@@ -29,7 +30,7 @@ final class SourceFileParser
     {
         $contents = @file_get_contents($path);
         if (false === $contents) {
-            throw ArchitectureValidationException::fatal('source.read', 'Cannot read Sillbeam source "'.$path.'".', ['file' => $path]);
+            throw ArchitectureValidationException::fatalMessage('source.read', new CoreMessage('finding.source.read', ['path' => $path]), ['file' => $path]);
         }
         $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse($contents) ?? [];
         $collector = new class($path) extends NodeVisitorAbstract {
@@ -57,7 +58,7 @@ final class SourceFileParser
                         foreach ($group->attrs as $attribute) {
                             if (null !== ($descriptor = $this->descriptorType($attribute->name))) {
                                 if (isset($this->descriptors[$class])) {
-                                    throw ArchitectureValidationException::fatal('discovery.multiple_attributes', 'Multiple Sillbeam descriptor attributes on '.$class, ['file' => $this->path, 'line' => $node->getStartLine(), 'class' => $class]);
+                                    throw ArchitectureValidationException::fatalMessage('discovery.multiple_attributes', new CoreMessage('finding.discovery.multiple_attributes', ['class' => $class]), ['file' => $this->path, 'line' => $node->getStartLine(), 'class' => $class]);
                                 }
                                 $this->descriptors[$class] = $descriptor;
                             }

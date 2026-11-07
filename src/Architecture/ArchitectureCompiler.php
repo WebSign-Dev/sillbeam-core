@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture;
 
+use Sillbeam\Core\I18n\CoreMessage;
 use Sillbeam\Core\Module\ModuleDefinition;
 use Sillbeam\Core\Project\ProjectDefinition;
 
@@ -122,7 +123,7 @@ final class ArchitectureCompiler
         }
         foreach (array_keys($overrides) as $key) {
             if (!isset($keys[$key])) {
-                $findings->add(new ArchitectureFinding('module.unknown_override', \sprintf('Module override "%s" does not match a discovered module.', $key), ['override' => $key]));
+                $findings->add(ArchitectureFinding::fromMessage('module.unknown_override', new CoreMessage('finding.module.unknown_override', ['key' => $key]), ['override' => $key]));
             }
         }
 
@@ -159,7 +160,7 @@ final class ArchitectureCompiler
         $projectIds = [];
         foreach ($projects as $project) {
             if (isset($projectIds[$project->id])) {
-                $findings->add(new ArchitectureFinding('project.duplicate_id', \sprintf('Duplicate Sillbeam project id "%s".', $project->id), ['project' => $project->class, 'file' => $project->descriptorFile], 'fatal'));
+                $findings->add(ArchitectureFinding::fromMessage('project.duplicate_id', new CoreMessage('finding.project.duplicate_id', ['id' => $project->id]), ['project' => $project->class, 'file' => $project->descriptorFile], 'fatal'));
             }
             $projectIds[$project->id] = true;
         }
@@ -168,12 +169,12 @@ final class ArchitectureCompiler
         foreach ($modules as $module) {
             $projectId = null === $module->projectClass ? null : ($projects[$module->projectClass]->id ?? null);
             if (null !== $module->projectClass && null === $projectId) {
-                $findings->add(new ArchitectureFinding('module.owner_missing', \sprintf('Private module "%s" has no owning project.', $module->class), $this->context($module), 'fatal'));
+                $findings->add(ArchitectureFinding::fromMessage('module.owner_missing', new CoreMessage('finding.module.owner_missing', ['module' => $module->class]), $this->context($module), 'fatal'));
                 continue;
             }
             $key = $module->key($projectId);
             if (isset($keys[$key])) {
-                $findings->add(new ArchitectureFinding('module.duplicate_key', \sprintf('Duplicate Sillbeam module key "%s".', $key), $this->context($module), 'fatal'));
+                $findings->add(ArchitectureFinding::fromMessage('module.duplicate_key', new CoreMessage('finding.module.duplicate_key', ['key' => $key]), $this->context($module), 'fatal'));
             }
             $keys[$key] = true;
         }
@@ -187,14 +188,14 @@ final class ArchitectureCompiler
                 $dependency = $modules[$dependencyClass] ?? null;
                 $context = [...$this->context($module), 'target' => $dependencyClass];
                 if (null === $dependency) {
-                    $findings->add(new ArchitectureFinding('dependency.unknown', \sprintf('Module "%s" depends on unknown module class "%s".', $module->class, $dependencyClass), $context));
+                    $findings->add(ArchitectureFinding::fromMessage('dependency.unknown', new CoreMessage('finding.dependency.unknown', ['module' => $module->class, 'target' => $dependencyClass]), $context));
                     continue;
                 }
                 if (!$module->isPrivate() && $dependency->isPrivate()) {
-                    $findings->add(new ArchitectureFinding('dependency.private', \sprintf('Shared module "%s" cannot depend on private module "%s".', $module->class, $dependency->class), $context));
+                    $findings->add(ArchitectureFinding::fromMessage('dependency.private', new CoreMessage('finding.dependency.private.shared', ['module' => $module->class, 'target' => $dependency->class]), $context));
                 }
                 if ($module->isPrivate() && $dependency->isPrivate() && $module->projectClass !== $dependency->projectClass) {
-                    $findings->add(new ArchitectureFinding('dependency.private', \sprintf('Private module "%s" cannot depend on private module "%s" from another project.', $module->class, $dependency->class), $context));
+                    $findings->add(ArchitectureFinding::fromMessage('dependency.private', new CoreMessage('finding.dependency.private.cross_project', ['module' => $module->class, 'target' => $dependency->class]), $context));
                 }
             }
         }
@@ -211,7 +212,7 @@ final class ArchitectureCompiler
                 $cycle = \array_slice($path, $visiting[$class]);
                 sort($cycle);
                 $module = $modules[$cycle[0] ?? $class];
-                $findings->add(new ArchitectureFinding('dependency.cycle', \sprintf('Circular Sillbeam module dependency detected at "%s".', $module->class), [...$this->context($module), 'cycle' => implode(', ', $cycle)]));
+                $findings->add(ArchitectureFinding::fromMessage('dependency.cycle', new CoreMessage('finding.dependency.cycle', ['module' => $module->class]), [...$this->context($module), 'cycle' => implode(', ', $cycle)]));
 
                 return;
             }
@@ -248,7 +249,7 @@ final class ArchitectureCompiler
         $module = $modules[$class] ?? null;
         if (null === $module) {
             // Unknown dependency edges are already reported at their declaring module.
-            $findings->add(new ArchitectureFinding('project.unknown_module', \sprintf('Project references unknown module class "%s".', $class), ['project' => $projectClass, 'target' => $class, 'file' => $projectFile]));
+            $findings->add(ArchitectureFinding::fromMessage('project.unknown_module', new CoreMessage('finding.project.unknown_module', ['class' => $class]), ['project' => $projectClass, 'target' => $class, 'file' => $projectFile]));
 
             return [];
         }
@@ -256,11 +257,11 @@ final class ArchitectureCompiler
         $usable = true;
         if (!$module->enabled) {
             $usable = false;
-            $findings->add(new ArchitectureFinding('dependency.disabled', \sprintf('Active graph requires disabled module "%s".', $module->id), $context));
+            $findings->add(ArchitectureFinding::fromMessage('dependency.disabled', new CoreMessage('finding.dependency.disabled', ['id' => $module->id]), $context));
         }
         if ($module->isPrivate() && $module->projectClass !== $projectClass) {
             $usable = false;
-            $findings->add(new ArchitectureFinding('project.private_module', \sprintf('Project cannot use private module "%s" from another project.', $module->class), $context));
+            $findings->add(ArchitectureFinding::fromMessage('project.private_module', new CoreMessage('finding.project.private_module', ['module' => $module->class]), $context));
         }
         if (!$usable || isset($visited[$class])) {
             return [];
@@ -289,14 +290,14 @@ final class ArchitectureCompiler
         $knownIds = array_map(static fn (ProjectDefinition $project): string => $project->id, $projects);
         foreach (array_keys($config) as $id) {
             if (!\in_array($id, $knownIds, true)) {
-                $findings->add(new ArchitectureFinding('project.unknown_configuration', \sprintf('Project configuration "%s" does not match a discovered project.', $id), ['project' => $id]));
+                $findings->add(ArchitectureFinding::fromMessage('project.unknown_configuration', new CoreMessage('finding.project.unknown_configuration', ['id' => $id]), ['project' => $id]));
             }
         }
         foreach ($projects as $class => $project) {
             $hosts = array_map(static fn (mixed $host): string => strtolower(trim((string) $host)), $config[$project->id]['hosts'] ?? []);
             foreach ($hosts as $host) {
                 if ('' === $host || str_contains($host, '://') || str_contains($host, '*') || str_contains($host, '/') || str_contains($host, ':')) {
-                    $findings->add(new ArchitectureFinding('project.host_invalid', \sprintf('Project "%s" contains invalid exact host "%s".', $project->id, $host), ['project' => $project->class, 'file' => $project->descriptorFile, 'host' => $host]));
+                    $findings->add(ArchitectureFinding::fromMessage('project.host_invalid', new CoreMessage('finding.project.host_invalid', ['id' => $project->id, 'host' => $host]), ['project' => $project->class, 'file' => $project->descriptorFile, 'host' => $host]));
                 }
             }
             $projects[$class] = new ProjectDefinition(
@@ -324,11 +325,11 @@ final class ArchitectureCompiler
         ksort($projects);
         foreach ($projects as $project) {
             if (\count($projects) > 1 && [] === $project->hosts) {
-                $findings->add(new ArchitectureFinding('project.host_required', \sprintf('Project "%s" requires at least one host when multiple projects exist.', $project->id), ['project' => $project->class, 'file' => $project->descriptorFile]));
+                $findings->add(ArchitectureFinding::fromMessage('project.host_required', new CoreMessage('finding.project.host_required', ['id' => $project->id]), ['project' => $project->class, 'file' => $project->descriptorFile]));
             }
             foreach ($project->hosts as $host) {
                 if (isset($hosts[$host])) {
-                    $findings->add(new ArchitectureFinding('project.host_duplicate', \sprintf('Host "%s" is assigned to multiple Sillbeam projects.', $host), ['host' => $host, 'project' => $project->class, 'file' => $project->descriptorFile]));
+                    $findings->add(ArchitectureFinding::fromMessage('project.host_duplicate', new CoreMessage('finding.project.host_duplicate', ['host' => $host]), ['host' => $host, 'project' => $project->class, 'file' => $project->descriptorFile]));
                 }
                 $hosts[$host] = $project->id;
             }

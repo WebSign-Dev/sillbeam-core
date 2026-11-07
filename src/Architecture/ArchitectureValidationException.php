@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture;
 
+use Sillbeam\Core\I18n\CoreMessage;
+
 /**
  * Strict validation failure carrying all available findings and the original fatal cause.
  *
@@ -37,5 +39,13 @@ final class ArchitectureValidationException extends \LogicException
     public static function fatal(string $rule, string $message, array $context = [], ?\Throwable $previous = null): self
     {
         return new self(new ArchitectureAnalysisResult([new ArchitectureFinding($rule, $message, $context, 'fatal')], cause: $previous), $previous);
+    }
+
+    /** @internal
+     * @param array<string, string|int|null> $context
+     */
+    public static function fatalMessage(string $rule, CoreMessage $message, array $context = [], ?\Throwable $previous = null): self
+    {
+        return new self(new ArchitectureAnalysisResult([ArchitectureFinding::fromMessage($rule, $message, $context, 'fatal')], cause: $previous), $previous);
     }
 }

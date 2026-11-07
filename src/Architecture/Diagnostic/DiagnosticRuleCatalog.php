@@ -5,39 +5,37 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Architecture\Diagnostic;
 
 use Sillbeam\Core\Architecture\ArchitectureFinding;
+use Sillbeam\Core\I18n\CoreTranslator;
 
 /** @internal Communication only: never changes rules, Findings, runtime graphs or reports. */
 final readonly class DiagnosticRuleCatalog
 {
-    public function __construct(private DiagnosticContext $context, private bool $analysisComplete)
+    public function __construct(private DiagnosticContext $context, private bool $analysisComplete, private CoreTranslator $translator = new CoreTranslator())
     {
     }
 
     /** @param list<class-string> $cycle Verified ordered witness, never sorted Finding participants. */
     public function explain(ArchitectureFinding $finding, array $cycle = []): FindingExplanation
     {
-        [$problem, $impact, $step] = $this->wording($finding->rule);
+        [$problem, $impact, $step] = $this->wording($finding);
         $files = $this->files($finding);
         $caution = 'fatal' === $finding->severity || \in_array($finding->rule, ['dependency.cycle', 'dependency.private', 'code.private', 'project.private_module'], true);
-        $resolutions = [new Resolution('technical', [$step.' Rerun architecture analysis.'], $files)];
-        if ('Unknown rule.' === $problem) {
-            $problem = $finding->message;
-        }
+        $resolutions = [new Resolution('technical', [$step.$this->translator->text('resolution.rerun')], $files)];
         $module = $this->text($finding, 'module');
         $target = $this->text($finding, 'target');
         $project = $this->text($finding, 'project');
         $class = $this->text($finding, 'class');
         if (null !== $class) {
-            $problem .= ' Reported class: '.$class.'.';
+            $problem .= $this->translator->text('diagnosis.context.class', ['value' => $class]);
         }
         if (null !== $module) {
-            $problem .= ' Module: '.$module.'.';
+            $problem .= $this->translator->text('diagnosis.context.module', ['value' => $module]);
         }
         if (null !== $target) {
-            $problem .= ' Target: '.$target.'.';
+            $problem .= $this->translator->text('diagnosis.context.target', ['value' => $target]);
         }
         if (null !== $project) {
-            $problem .= ' Project: '.$project.'.';
+            $problem .= $this->translator->text('diagnosis.context.project', ['value' => $project]);
         }
 
         switch ($finding->rule) {
@@ -46,11 +44,11 @@ final readonly class DiagnosticRuleCatalog
                 break;
             case 'dependency.cycle':
                 if ([] !== $cycle) {
-                    $problem = 'Declared dependencies form a cycle: '.implode(' → ', $cycle).'.';
+                    $problem = $this->translator->text('diagnosis.cycle.witness', ['cycle' => implode(' → ', $cycle)]);
                     $files = array_values($this->context->graph()->sourceDescriptors($cycle));
                 }
-                $impact = 'Modules cannot depend on each other in a loop. Sillbeam cannot decide which dependency your application should remove.';
-                $resolutions = [new Resolution('option', ['Review the involved descriptors'.([] === $files ? '' : ': '.implode(', ', $files)).'. Decide which module should depend on the other. Remove or redirect a dependency, or move shared contracts into a separate module. Rerun architecture analysis.'], $files)];
+                $impact = $this->translator->text('diagnosis.cycle.impact');
+                $resolutions = [new Resolution('option', [$this->translator->text('resolution.cycle.review', ['files' => [] === $files ? '' : ': '.implode(', ', $files)])], $files)];
                 break;
             case 'dependency.private':
             case 'code.private':
@@ -64,20 +62,20 @@ final readonly class DiagnosticRuleCatalog
             case 'dependency.unknown':
             case 'project.unknown_module':
                 $descriptor = 'dependency.unknown' === $finding->rule ? ($this->context->modules[$module ?? '']->descriptorFile ?? null) : ($this->context->projects[$project ?? '']->descriptorFile ?? null);
-                $resolutions = [new Resolution('technical', ['Check '.($target ?? 'the reported target class').' in '.($descriptor ?? 'the reported descriptor').'. Make sure the descriptor is in a configured discovery directory and is not excluded. Correct the declaration or restore the descriptor, then rerun architecture analysis.'], $files)];
+                $resolutions = [new Resolution('technical', [$this->translator->text('resolution.unknown_target', ['target' => $target ?? $this->translator->text('diagnosis.context.reported_target'), 'descriptor' => $descriptor ?? $this->translator->text('diagnosis.context.reported_descriptor')])], $files)];
                 break;
             case 'module.unknown_override':
                 $key = $this->text($finding, 'override');
                 if (null !== $key) {
                     $address = 'sillbeam.modules["'.$key.'"]';
-                    $problem .= ' Configured key: '.$address.'.';
-                    $resolutions = [new Resolution('technical', ['Compare '.$address.' with discovered module keys (shared:<id> or project:<project-id>:<module-id>); correct the key or remove the stale override, then rerun architecture analysis.'], $files, [$address])];
+                    $problem .= $this->translator->text('diagnosis.context.configuration', ['value' => $address]);
+                    $resolutions = [new Resolution('technical', [$this->translator->text('resolution.module_override', ['address' => $address])], $files, [$address])];
                 }
                 break;
             case 'project.unknown_configuration':
                 if (null !== $project) {
                     $address = 'sillbeam.projects["'.$project.'"]';
-                    $resolutions = [new Resolution('technical', ['Compare '.$address.' with discovered Project IDs; correct the ID or remove the stale configuration, then rerun architecture analysis.'], $files, [$address])];
+                    $resolutions = [new Resolution('technical', [$this->translator->text('resolution.project_configuration', ['address' => $address])], $files, [$address])];
                 }
                 break;
             case 'project.host_invalid':
@@ -90,14 +88,17 @@ final readonly class DiagnosticRuleCatalog
                 [$problem, $resolutions] = $this->duplicate($finding, $problem, $files);
                 break;
         }
-        if ('fatal' === $finding->severity && $problem !== $finding->message) {
+        if ('fatal' === $finding->severity) {
             // Parser/descriptor/execution messages may carry evidence absent from scalar context.
-            $problem .= ' Reported error: '.$finding->message;
+            $error = $finding->localizedMessage($this->translator);
+            if ($problem !== $error) {
+                $problem .= $this->translator->text('diagnosis.context.reported_error', ['error' => $error]);
+            }
         }
         if (!$this->analysisComplete) {
-            $impact .= ' Analysis incomplete: fix the blocking error and rerun before relying on dependencies or activation.';
+            $impact .= $this->translator->text('diagnosis.analysis_incomplete');
             if ('fatal' !== $finding->severity) {
-                $resolutions = [new Resolution('technical', ['Fix the errors that stopped the analysis first. Then rerun to check this finding again.'], $files)];
+                $resolutions = [new Resolution('technical', [$this->translator->text('resolution.analysis_incomplete')], $files)];
             }
         }
 
@@ -105,43 +106,47 @@ final readonly class DiagnosticRuleCatalog
     }
 
     /** @return array{string, string, string} */
-    private function wording(string $rule): array
+    private function wording(ArchitectureFinding $finding): array
     {
-        return match ($rule) {
-            'dependency.unknown' => ['A declared module dependency was not discovered.', 'Sillbeam needs the module descriptor to check this dependency and activate the module.', 'Check the target class and its descriptor. Make sure its directory is included by discovery and is not excluded.'],
-            'project.unknown_module' => ['A module required by a Project was not discovered.', 'Sillbeam cannot check or activate the module without its descriptor.', 'Check the module class in the Project descriptor and the configured discovery directories.'],
-            'code.undeclared_dependency' => ['Code uses another module without declaring it as a direct dependency.', 'Each module must declare the modules its code uses directly.', 'Check the reported reference and both module descriptors before changing dependencies.'],
-            'dependency.private', 'code.private', 'project.private_module' => ['Access crosses a private Project boundary.', 'Declaring a dependency does not grant access to another Project\'s private module.', 'Keep private implementation within its owning Project or deliberately move reusable contracts into a shared module.'],
-            'dependency.cycle' => ['Declared module dependencies contain a cycle.', 'Modules cannot depend on each other in a loop. Decide which module should depend on the other.', 'Review the involved descriptor declarations and choose the intended dependency direction.'],
-            'dependency.disabled' => ['A required module is disabled.', 'Sillbeam cannot activate a disabled module. Its configuration key is unknown from the available information.', 'Check which module is required and whether its configuration disables it. Decide whether to enable it or remove the requirement.'],
-            'code.inactive' => ['Code references an inactive module.', 'The target module is not active. The available information does not show whether it is disabled or unassigned.', 'Check whether the target is enabled and selected by a Project before changing the reference.'],
-            'code.unknown_class' => ['A referenced application class could not be found.', 'The class was not found in the application source or loaded/mapped classes available to this check. This does not validate all PHP autoloading, external Composer types or Symfony autowiring.', 'Check the class name/import and its source file. If its Composer PSR-4 mapping changed, update it and regenerate the autoloader.'],
-            'module.unknown_override' => ['A module configuration override matches no discovered module.', 'The key does not identify a module in this shared or private Project scope.', 'Compare the override key with discovered shared:<id> and project:<project-id>:<module-id> keys; correct it or remove the stale override.'],
-            'project.unknown_configuration' => ['Project configuration matches no discovered Project.', 'The configured Project ID cannot select a discovered Project.', 'Compare the configured ID with discovered Project IDs; correct it or remove stale configuration.'],
-            'project.host_invalid' => ['A configured Project host is not an exact hostname.', 'Project host routing requires an exact hostname without a scheme, port, path or wildcard.', 'Replace the invalid value with the intended exact hostname, without a scheme, port, path or wildcard.'],
-            'project.host_required' => ['A Project has no configured host in a multi-Project application.', 'Every Project needs at least one exact host so request selection is defined.', 'Choose an exact host for this Project and configure its hosts list.'],
-            'project.host_duplicate' => ['An exact host is assigned to more than one Project.', 'Host-based Project selection is ambiguous.', 'Decide which Project should own the host and remove that host from the other Project configurations.'],
-            'module.duplicate_key' => ['Multiple modules have the same logical key.', 'Module IDs must be unique in the shared scope or within their owning Project. Otherwise configuration and activation cannot select the right module.', 'Choose unique IDs within the affected scope and update the affected configuration keys.'],
-            'project.duplicate_id' => ['Multiple Projects have the same ID.', 'The same ID cannot select two different Projects.', 'Choose unique Project IDs and update affected Project configuration and private module keys.'],
-            'module.owner_missing' => ['A private module has no discovered owning Project.', 'Sillbeam cannot find the owning Project, so the module scope and activation are unknown.', 'Correct the module ownership/layout so its owning Project is discoverable, or deliberately place it in a configured shared module root.'],
-            'discovery.owner_missing' => ['A module in a Project discovery root has no owning Project.', 'Its directory is not inside a discovered Project. Sillbeam cannot identify its owning Project.', 'Restore a discoverable owning Project or deliberately move the module into a configured shared root; verify ownership and discovery boundaries.'],
-            'discovery.module_boundary' => ['A descriptor lies outside allowed module discovery boundaries.', 'Sillbeam cannot assign this descriptor to a configured shared module directory or an owning Project.', 'Move the descriptor into the intended configured module root or owning Project area, or correct the discovery root configuration.'],
-            'discovery.project_boundary' => ['A descriptor lies outside allowed Project discovery boundaries.', 'Sillbeam cannot assign this descriptor to a configured Project directory.', 'Move the descriptor into the intended configured Project root or correct that discovery root configuration.'],
-            'discovery.module_overlap' => ['Module areas overlap.', 'A source file must belong to one module. Overlapping module directories make that assignment unclear.', 'Separate the reported module areas so no module contains another module descriptor.'],
-            'discovery.project_overlap' => ['Project areas overlap.', 'Overlapping Project directories make it unclear which Project owns their code.', 'Separate the reported Project areas so no Project contains another Project descriptor.'],
-            'discovery.project_inside_module' => ['A Project area is inside a module area.', 'A module cannot contain a Project; these ownership areas conflict.', 'Separate the reported Project and module areas and verify their configured roots.'],
-            'discovery.descriptor_class' => ['A descriptor class does not match its expected PSR-4 location.', 'The namespace and class name must match the filename and configured namespace for that directory.', 'Align the descriptor namespace, short class name, filename and configured Composer/discovery mapping with the expected class in the original finding.'],
-            'discovery.descriptor_file' => ['A descriptor class resolves to a different file.', 'The loaded class comes from another file. Its metadata cannot be used for this descriptor.', 'Inspect the class declaration and Composer mappings, remove unintended duplicate mappings/declarations and ensure the reported class belongs to the intended descriptor file.'],
-            'discovery.descriptor_metadata' => ['The Sillbeam descriptor attribute cannot be instantiated or read.', 'A missing attribute or invalid arguments prevent Sillbeam from reading the descriptor settings.', 'Check the reported attribute and its constructor arguments, types and explicit ID; use the original error to identify the invalid value.'],
-            'discovery.descriptor_id' => ['Discovery cannot derive a valid ID from the descriptor class.', 'The default class-derived identifier is not a valid lowercase Sillbeam ID.', 'Set an explicit attribute id matching [a-z][a-z0-9-]*, or rename the descriptor so a valid ID can be derived.'],
-            'discovery.multiple_descriptors' => ['A file contains multiple descriptors of the requested type.', 'Sillbeam needs one descriptor of this type per file.', 'Keep one descriptor of the requested type per file and align each class with its PSR-4 filename.'],
-            'discovery.multiple_attributes' => ['A class has multiple Sillbeam descriptor attributes.', 'Sillbeam needs one Module or Project descriptor attribute on this class.', 'Keep exactly one intended Sillbeam descriptor attribute on the reported class.'],
-            'source.parse' => ['A source file contains a PHP syntax error.', 'Sillbeam cannot reliably read the classes and references in this file.', 'Fix the syntax error at the reported file/line using the original parser message.'],
-            'source.read' => ['A source file could not be read.', 'An unreadable file cannot be treated as empty or valid.', 'Check the reported file exists and the analysis process has read permissions; restore the file or access.'],
-            'source.duplicate_class' => ['A class is declared more than once in the checked source.', 'Class names are case-insensitive. Sillbeam cannot reliably assign references to one declaration.', 'Locate the competing declarations of the reported class and remove or rename the unintended declaration; update affected references.'],
-            'report.execution' => ['Architecture report execution failed.', 'The check itself failed; this does not establish an architecture violation or a valid result.', 'Read the original exception and fix the reported execution or configuration error.'],
-            default => ['Unknown rule.', 'No rule-specific explanation is available. Check the original message and context.', 'Inspect the original finding and available source evidence before choosing a correction.'],
+        $key = match ($finding->rule) {
+            'dependency.unknown' => 'diagnosis.dependency.unknown',
+            'project.unknown_module' => 'diagnosis.project.unknown_module',
+            'code.undeclared_dependency' => 'diagnosis.code.undeclared_dependency',
+            'dependency.private', 'code.private', 'project.private_module' => 'diagnosis.dependency.private',
+            'dependency.cycle' => 'diagnosis.dependency.cycle',
+            'dependency.disabled' => 'diagnosis.dependency.disabled',
+            'code.inactive' => 'diagnosis.code.inactive',
+            'code.unknown_class' => 'diagnosis.code.unknown_class',
+            'module.unknown_override' => 'diagnosis.module.unknown_override',
+            'project.unknown_configuration' => 'diagnosis.project.unknown_configuration',
+            'project.host_invalid' => 'diagnosis.project.host_invalid',
+            'project.host_required' => 'diagnosis.project.host_required',
+            'project.host_duplicate' => 'diagnosis.project.host_duplicate',
+            'module.duplicate_key' => 'diagnosis.module.duplicate_key',
+            'project.duplicate_id' => 'diagnosis.project.duplicate_id',
+            'module.owner_missing' => 'diagnosis.module.owner_missing',
+            'discovery.owner_missing' => 'diagnosis.discovery.owner_missing',
+            'discovery.module_boundary' => 'diagnosis.discovery.module_boundary',
+            'discovery.project_boundary' => 'diagnosis.discovery.project_boundary',
+            'discovery.module_overlap' => 'diagnosis.discovery.module_overlap',
+            'discovery.project_overlap' => 'diagnosis.discovery.project_overlap',
+            'discovery.project_inside_module' => 'diagnosis.discovery.project_inside_module',
+            'discovery.descriptor_class' => 'diagnosis.discovery.descriptor_class',
+            'discovery.descriptor_file' => 'diagnosis.discovery.descriptor_file',
+            'discovery.descriptor_metadata' => 'diagnosis.discovery.descriptor_metadata',
+            'discovery.descriptor_id' => 'diagnosis.discovery.descriptor_id',
+            'discovery.multiple_descriptors' => 'diagnosis.discovery.multiple_descriptors',
+            'discovery.multiple_attributes' => 'diagnosis.discovery.multiple_attributes',
+            'source.parse' => 'diagnosis.source.parse',
+            'source.read' => 'diagnosis.source.read',
+            'source.duplicate_class' => 'diagnosis.source.duplicate_class',
+            'report.execution' => 'diagnosis.report.execution',
+            default => 'diagnosis.unknown',
         };
+
+        $problem = 'diagnosis.unknown' === $key ? $finding->localizedMessage($this->translator) : $this->translator->text($key.'.problem');
+
+        return [$problem, $this->translator->text($key.'.impact'), $this->translator->text($key.'.step')];
     }
 
     /** @param list<Resolution> $fallback
@@ -152,7 +157,7 @@ final readonly class DiagnosticRuleCatalog
         $source = $this->text($finding, 'module');
         $target = $this->text($finding, 'target');
         if (!$this->analysisComplete || !$this->context->complete || null === $source || null === $target || null === $this->context->relationship($source, $target)) {
-            return [$impact.' There is not enough information to recommend adding this dependency. Complete the analysis first.', $fallback, true];
+            return [$impact.$this->translator->text('diagnosis.dependency.insufficient'), $fallback, true];
         }
         $assessment = $this->context->assessDependency($source, $target);
         $activation = $this->activationNotice($assessment);
@@ -165,18 +170,18 @@ final readonly class DiagnosticRuleCatalog
             $chain = [$source, ...$assessment->returnPath];
             $files = array_values(array_unique([...$this->files($finding), ...array_values($this->context->graph()->sourceDescriptors($assessment->returnPath))]));
 
-            return ['Adding this dependency would create a cycle: '.implode(' → ', $chain).'. Existing dependency chain: '.implode(' → ', $assessment->returnPath).'.'.('' === $activation ? '' : ' '.$activation), [new Resolution('option', ['Decide which module should depend on the other. Remove or redirect the code reference, or move shared contracts into a separate module. Do not add a dependency that creates this cycle. Review '.implode(', ', $files).' and rerun architecture analysis.'], $files)], true];
+            return [$this->translator->text('diagnosis.dependency.would_cycle', ['chain' => implode(' → ', $chain), 'existing' => implode(' → ', $assessment->returnPath)]).('' === $activation ? '' : ' '.$activation), [new Resolution('option', [$this->translator->text('resolution.dependency.avoid_cycle', ['files' => implode(', ', $files)])], $files)], true];
         }
-        $resolution = $assessment->resolution();
+        $resolution = $assessment->resolution($this->translator);
         if (null !== $resolution) {
-            return [$impact.('' === $activation ? ' No conflicting dependency was detected for this change.' : ' '.$activation), [$resolution], '' !== $activation];
+            return [$impact.('' === $activation ? $this->translator->text('diagnosis.dependency.no_conflict') : ' '.$activation), [$resolution], '' !== $activation];
         }
 
         $reason = true === $assessment->alreadyDeclared
-            ? 'The descriptor already declares this dependency. Rerun the check before editing it.'
+            ? $this->translator->text('diagnosis.dependency.already_declared')
             : (\in_array('unresolved_dependencies', $assessment->blockers, true)
-                ? 'Some declared modules could not be found, so Sillbeam cannot rule out a cycle.'
-                : 'The available module or activation information is not enough to recommend this change. Check the target state first.');
+                ? $this->translator->text('diagnosis.dependency.unresolved')
+                : $this->translator->text('diagnosis.dependency.unknown_state'));
 
         return [$impact.' '.$reason.('' === $activation ? '' : ' '.$activation), $fallback, true];
     }
@@ -186,24 +191,24 @@ final readonly class DiagnosticRuleCatalog
         $notes = [];
         if ('active' !== $assessment->sourceState) {
             $notes[] = match ($assessment->sourceState) {
-                'disabled' => 'The source module is disabled.',
-                'unassigned' => 'The source module is enabled but unassigned to a Project.',
-                default => 'The source module activation state is unknown.',
+                'disabled' => $this->translator->text('diagnosis.activation.source_disabled'),
+                'unassigned' => $this->translator->text('diagnosis.activation.source_unassigned'),
+                default => $this->translator->text('diagnosis.activation.source_unknown'),
             };
         }
         if ('active' !== $assessment->targetState) {
             $notes[] = match ($assessment->targetState) {
-                'disabled' => 'The target module is disabled. Check its enabled setting before changing dependencies.',
-                'unassigned' => 'The target module is enabled but unassigned to a Project. Adding a dependency may activate it; check which Projects should use it.',
-                default => 'The target module activation state is unknown. Check its configuration and Project assignment first.',
+                'disabled' => $this->translator->text('diagnosis.activation.target_disabled'),
+                'unassigned' => $this->translator->text('diagnosis.activation.target_unassigned'),
+                default => $this->translator->text('diagnosis.activation.target_unknown'),
             };
         }
         $unassigned = array_keys(array_filter($assessment->targetProjectStates, static fn (string $state): bool => 'unassigned' === $state));
         if ('active' === $assessment->targetState && [] !== $unassigned) {
-            $notes[] = 'The target is not active in these Projects that use the source: '.implode(', ', $unassigned).'. Adding this dependency may activate it there.';
+            $notes[] = $this->translator->text('diagnosis.activation.project_unassigned', ['projects' => implode(', ', $unassigned)]);
         }
         if (\in_array('unknown', $assessment->targetProjectStates, true)) {
-            $notes[] = 'Target activation is unknown in some Projects that use the source. Check their module selection first.';
+            $notes[] = $this->translator->text('diagnosis.activation.project_unknown');
         }
 
         return implode(' ', $notes);
@@ -216,9 +221,9 @@ final readonly class DiagnosticRuleCatalog
     {
         $target = $this->text($finding, \in_array($finding->rule, ['project.private_module', 'dependency.disabled'], true) ? 'module' : 'target');
         $owner = null === $target ? null : ($this->context->modules[$target]->projectClass ?? null);
-        $impact = (null === $owner ? 'The target is private to its owning Project.' : $target.' is private to Project '.$owner.'.').' Declaring a dependency does not grant access across this boundary.';
+        $impact = (null === $owner ? $this->translator->text('diagnosis.privacy.owner_unknown') : $this->translator->text('diagnosis.privacy.owner', ['target' => $target, 'owner' => $owner])).$this->translator->text('diagnosis.privacy.boundary');
 
-        return [$impact, [new Resolution('option', ['Keep the implementation in its owning Project, or move reusable contracts into a shared module and update the reference or dependency. Rerun architecture analysis.'], $files)]];
+        return [$impact, [new Resolution('option', [$this->translator->text('resolution.privacy.keep')], $files)]];
     }
 
     /** @param list<string> $files
@@ -238,7 +243,7 @@ final readonly class DiagnosticRuleCatalog
             [$impact, $options] = $this->privateAccess($finding, $files);
             $key = $this->context->moduleConfigurationKey($target);
             $address = null === $key ? null : 'sillbeam.modules["'.$key.'"].enabled';
-            $impact .= ' The target is disabled; enabling it does not permit this Project access.'.(null === $address ? '' : ' Owner configuration: '.$address.'.');
+            $impact .= $this->translator->text('diagnosis.privacy.target_disabled').(null === $address ? '' : $this->translator->text('diagnosis.privacy.owner_configuration', ['address' => $address]));
             $resolutions = array_map(static fn (Resolution $option): Resolution => new Resolution($option->kind, $option->steps, $option->files, null === $address ? [] : [$address]), $options);
 
             return [$problem, $impact, $resolutions];
@@ -246,9 +251,9 @@ final readonly class DiagnosticRuleCatalog
         if ('disabled' === $state && null !== $target) {
             $key = $this->context->moduleConfigurationKey($target);
             $address = null === $key ? null : 'sillbeam.modules["'.$key.'"].enabled';
-            $step = null === $address ? 'Verify the target module override and decide whether it should be enabled.' : 'If this module is required, set '.$address.' to true; otherwise remove the requirement/reference.';
+            $step = null === $address ? $this->translator->text('diagnosis.activation.verify_override') : $this->translator->text('resolution.activation.enable', ['address' => $address]);
 
-            return [$problem, $target.' is disabled in the module configuration. Selecting it in a Project or declaring a dependency does not enable it.', [new Resolution('option', [$step.' Rerun architecture analysis and check which modules are active.'], $files, null === $address ? [] : [$address])]];
+            return [$problem, $this->translator->text('diagnosis.activation.config_disabled', ['target' => $target]), [new Resolution('option', [$step.$this->translator->text('resolution.activation.rerun')], $files, null === $address ? [] : [$address])]];
         }
         if ('unassigned' === $state && null !== $target) {
             $source = $this->text($finding, 'module');
@@ -257,17 +262,17 @@ final readonly class DiagnosticRuleCatalog
             foreach ($projects as $project) {
                 $projectFiles[] = $this->context->projects[$project]->descriptorFile;
             }
-            $step = [] === $projectFiles ? 'Choose which Project should use '.$target.' and update that Project descriptor\'s modules list.' : 'If this Project should use the module, select \\'.ltrim($target, '\\').'::class in the SillbeamProject modules list of '.implode(' or ', $projectFiles).'.';
+            $step = [] === $projectFiles ? $this->translator->text('resolution.activation.choose_project', ['target' => $target]) : $this->translator->text('resolution.activation.select_module', ['target' => '\\'.ltrim($target, '\\').'::class', 'files' => implode($this->translator->text('diagnosis.list.or'), $projectFiles)]);
 
-            $impact = $target.' is enabled but unassigned to the checked Projects; it is not disabled.';
+            $impact = $this->translator->text('diagnosis.activation.config_unassigned', ['target' => $target]);
             if (null !== $source && false === $this->context->assessDependency($source, $target)->alreadyDeclared) {
-                $impact .= ' The source also has no direct dependency declaration for this module. After selecting it, rerun the check before adding that declaration.';
+                $impact .= $this->translator->text('diagnosis.activation.no_direct_dependency');
             }
 
-            return [$problem, $impact, [new Resolution('option', [$step.' Otherwise remove or restructure the reference. Rerun architecture analysis and check which modules are active.'], array_values(array_unique([...$files, ...$projectFiles])))]];
+            return [$problem, $impact, [new Resolution('option', [$step.$this->translator->text('resolution.activation.restructure')], array_values(array_unique([...$files, ...$projectFiles])))]];
         }
 
-        return [$problem, 'The module is reported as inactive, but its activation state is unknown. Do not assume it is disabled or unassigned. Check its configuration before changing it.', [new Resolution('technical', ['Check the target module, its enabled setting and Project assignment. Rerun a complete analysis before changing activation.'], $files)]];
+        return [$problem, $this->translator->text('diagnosis.activation.unknown'), [new Resolution('technical', [$this->translator->text('resolution.activation.verify')], $files)]];
     }
 
     /** @param list<string> $files
@@ -281,7 +286,7 @@ final readonly class DiagnosticRuleCatalog
         $addresses = null === $address ? [] : [$address];
         $host = $this->text($finding, 'host');
         if (null !== $host) {
-            $problem .= ' Reported host: "'.$host.'".';
+            $problem .= $this->translator->text('diagnosis.host.reported', ['host' => $host]);
         }
         if ('project.host_duplicate' === $finding->rule && null !== $host) {
             $owners = $this->context->projectsForHost($host);
@@ -293,14 +298,14 @@ final readonly class DiagnosticRuleCatalog
                 }
             }
             if ([] !== $owners) {
-                $impact .= ' Configured Projects: '.implode(', ', array_column($owners, 'class')).'.';
+                $impact .= $this->translator->text('diagnosis.host.projects', ['projects' => implode(', ', array_column($owners, 'class'))]);
             }
         }
         $addresses = array_values(array_unique($addresses));
         sort($addresses, \SORT_STRING);
         $files = array_values(array_unique($files));
         sort($files, \SORT_STRING);
-        $step .= ([] === $addresses ? '' : ' Review '.implode(', ', array_unique($addresses)).'.').' Rerun architecture analysis.';
+        $step .= ([] === $addresses ? '' : $this->translator->text('resolution.host.review', ['addresses' => implode(', ', array_unique($addresses))])).$this->translator->text('resolution.rerun');
 
         return [$problem, $impact, [new Resolution('option', [$step], array_values(array_unique($files)), array_values(array_unique($addresses)))]];
     }
@@ -318,9 +323,9 @@ final readonly class DiagnosticRuleCatalog
                         $files[] = $other->descriptorFile;
                     }
                 }
-                $problem .= ' ID: '.$module->id.'; scope: '.($module->projectClass ?? 'shared').'.';
+                $problem .= $this->translator->text('diagnosis.duplicate.module_id', ['id' => $module->id, 'scope' => $module->projectClass ?? 'shared']);
             }
-            $step = 'Choose unique module IDs within this scope, edit the affected descriptor attributes and update their scoped configuration keys.';
+            $step = $this->translator->text('resolution.duplicate.module');
         } else {
             $project = $this->context->projects[$this->text($finding, 'project') ?? ''] ?? null;
             if (null !== $project) {
@@ -329,15 +334,15 @@ final readonly class DiagnosticRuleCatalog
                         $files[] = $other->descriptorFile;
                     }
                 }
-                $problem .= ' ID: '.$project->id.'.';
+                $problem .= $this->translator->text('diagnosis.duplicate.project_id', ['id' => $project->id]);
             }
-            $step = 'Choose unique Project IDs, edit the affected descriptors and update Project configuration and private module keys.';
+            $step = $this->translator->text('resolution.duplicate.project');
         }
 
         $files = array_values(array_unique($files));
         sort($files, \SORT_STRING);
 
-        return [$problem, [new Resolution('option', [$step.' Review '.([] === $files ? 'the reported descriptors' : implode(', ', array_unique($files))).' and rerun architecture analysis.'], array_values(array_unique($files)))]];
+        return [$problem, [new Resolution('option', [$step.$this->translator->text('resolution.duplicate.review', ['files' => [] === $files ? $this->translator->text('diagnosis.context.reported_descriptors') : implode(', ', array_unique($files))])], array_values(array_unique($files)))]];
     }
 
     private function text(ArchitectureFinding $finding, string $key): ?string

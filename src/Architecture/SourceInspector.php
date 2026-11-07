@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture;
 
+use Sillbeam\Core\I18n\CoreError;
+use Sillbeam\Core\I18n\CoreMessage;
+
 /**
  * Caches a deterministic AST source index per serialized discovery options for one build.
  *
@@ -83,7 +86,7 @@ final class SourceInspector
             try {
                 $files[$path] = $parser->parse($path);
             } catch (\PhpParser\Error $error) {
-                $failures->add(new ArchitectureFinding('source.parse', \sprintf('Cannot parse Sillbeam source "%s": %s', $path, $error->getMessage()), ['file' => $path, 'line' => $error->getStartLine()], 'fatal'));
+                $failures->add(ArchitectureFinding::fromMessage('source.parse', new CoreMessage('finding.source.parse', ['path' => $path, 'error' => CoreError::message($error)]), ['file' => $path, 'line' => $error->getStartLine()], 'fatal'));
                 $cause ??= $error;
             } catch (ArchitectureValidationException $error) {
                 foreach ($error->result->findings as $finding) {
@@ -115,10 +118,10 @@ final class SourceInspector
                 if ($type === $attribute) {
                     $expected = $options->namespaceForDirectory(\dirname($file->path)).'\\'.basename($file->path, '.php');
                     if ($class !== $expected) {
-                        throw ArchitectureValidationException::fatal('discovery.descriptor_class', \sprintf('Descriptor "%s" must declare PSR-4 class "%s".', $file->path, $expected), ['file' => $file->path, 'class' => $class]);
+                        throw ArchitectureValidationException::fatalMessage('discovery.descriptor_class', new CoreMessage('finding.discovery.descriptor_class', ['path' => $file->path, 'class' => $expected]), ['file' => $file->path, 'class' => $class]);
                     }
                     if (isset($descriptors[$file->path])) {
-                        throw ArchitectureValidationException::fatal('discovery.multiple_descriptors', 'Multiple Sillbeam descriptors in '.$file->path, ['file' => $file->path]);
+                        throw ArchitectureValidationException::fatalMessage('discovery.multiple_descriptors', new CoreMessage('finding.discovery.multiple_descriptors', ['path' => $file->path]), ['file' => $file->path]);
                     }
                     $descriptors[$file->path] = $class;
                 }
@@ -184,12 +187,12 @@ final class SourceInspector
         try {
             $attributes = $reflection->getAttributes($attribute);
             if ([] === $attributes) {
-                throw ArchitectureValidationException::fatal('discovery.descriptor_metadata', 'Missing descriptor attribute on '.$class, ['class' => $class, 'file' => $file]);
+                throw ArchitectureValidationException::fatalMessage('discovery.descriptor_metadata', new CoreMessage('finding.discovery.descriptor_metadata.missing', ['class' => $class]), ['class' => $class, 'file' => $file]);
             }
 
             return $attributes[0]->newInstance();
         } catch (\Error|\ReflectionException|\InvalidArgumentException $error) {
-            throw ArchitectureValidationException::fatal('discovery.descriptor_metadata', \sprintf('Cannot read Sillbeam descriptor "%s": %s', $class, $error->getMessage()), ['class' => $class, 'file' => $file], $error);
+            throw ArchitectureValidationException::fatalMessage('discovery.descriptor_metadata', new CoreMessage('finding.discovery.descriptor_metadata.read', ['class' => $class, 'error' => CoreError::message($error)]), ['class' => $class, 'file' => $file], $error);
         }
     }
 
@@ -210,7 +213,7 @@ final class SourceInspector
         }
         $reflection = new \ReflectionClass($class);
         if (FilesystemPath::normalize((string) $reflection->getFileName()) !== $file) {
-            throw ArchitectureValidationException::fatal('discovery.descriptor_file', \sprintf('Descriptor class "%s" does not belong to "%s".', $class, $file), ['file' => $file, 'class' => $class]);
+            throw ArchitectureValidationException::fatalMessage('discovery.descriptor_file', new CoreMessage('finding.discovery.descriptor_file', ['class' => $class, 'path' => $file]), ['file' => $file, 'class' => $class]);
         }
 
         return $reflection;

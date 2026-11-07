@@ -6,6 +6,8 @@ namespace Sillbeam\Core\Architecture\Console;
 
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Console\Style\ConsoleStyle;
+use Sillbeam\Core\I18n\CoreError;
+use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -28,29 +30,12 @@ final class ArchitectureCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption('format', null, InputOption::VALUE_REQUIRED, 'Output format: text or complete schema-version-1 json.', 'text');
-        $this->addOption('all', null, InputOption::VALUE_NONE, 'Expand every diagnosis and its original findings.');
-        $this->addOption('issue', null, InputOption::VALUE_REQUIRED, 'Expand diagnosis N, including every original finding; numbers apply only to this run.');
-        $this->addOption('couplings', null, InputOption::VALUE_NONE, 'Show informational application couplings separately (text only).');
-        $this->setHelp(<<<'HELP'
-With no findings, show a short success status. With one diagnosis, show its full
-explanation. With several diagnoses, show the complete index and expand the first.
-
-  php bin/console sillbeam:architecture
-  php bin/console sillbeam:architecture --issue=2
-  php bin/console sillbeam:architecture --all
-  php bin/console sillbeam:architecture -v --couplings
-  php bin/console sillbeam:architecture --format=json --no-ansi
-
-Use -v for rule codes, full original paths and technical evidence. Default locations
-are compact and relative. --issue=N selects a diagnosis group, not a raw finding;
-its number is valid only for the current analysis run. --all and --issue are mutually
-exclusive. --format=json always contains every finding and cannot be combined with
---all, --issue or --couplings. -v does not add anything to JSON. --quiet suppresses
-output in either format. No source files are changed. Exit codes: 0 valid, 1 violations,
-2 unavailable or invalid usage. Terminal width is detected automatically and capped
-at 90 columns. ANSI follows Symfony's stream detection or --ansi/--no-ansi.
-HELP);
+        $translator = new CoreTranslator();
+        $this->addOption('format', null, InputOption::VALUE_REQUIRED, $translator->text('architecture.cli.format'), 'text');
+        $this->addOption('all', null, InputOption::VALUE_NONE, $translator->text('architecture.cli.all'));
+        $this->addOption('issue', null, InputOption::VALUE_REQUIRED, $translator->text('architecture.cli.issue'));
+        $this->addOption('couplings', null, InputOption::VALUE_NONE, $translator->text('architecture.cli.couplings'));
+        $this->setHelp($translator->text('architecture.cli.help'));
     }
 
     public function run(InputInterface $input, OutputInterface $output): int
@@ -83,20 +68,20 @@ HELP);
     {
         $format = $input->getOption('format');
         if (!\in_array($format, ['text', 'json'], true)) {
-            throw new \InvalidArgumentException('Supported formats: text, json.');
+            throw CoreError::create(\InvalidArgumentException::class, 'architecture.cli.invalid_format');
         }
         if ($input->hasParameterOption('--ansi') && $input->hasParameterOption('--no-ansi')) {
-            throw new \InvalidArgumentException('Choose either --ansi or --no-ansi.');
+            throw CoreError::create(\InvalidArgumentException::class, 'architecture.cli.ansi_options');
         }
         $issue = $input->getOption('issue');
         if (null !== $issue && false === filter_var($issue, \FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])) {
-            throw new \InvalidArgumentException('--issue must be a positive integer.');
+            throw CoreError::create(\InvalidArgumentException::class, 'architecture.cli.positive_issue');
         }
         if (null !== $issue && $input->getOption('all')) {
-            throw new \InvalidArgumentException('Choose either --issue=N or --all.');
+            throw CoreError::create(\InvalidArgumentException::class, 'architecture.cli.issue_options');
         }
         if ('json' === $format && (null !== $issue || $input->getOption('all') || $input->getOption('couplings'))) {
-            throw new \InvalidArgumentException('--format=json contains the complete report; do not combine it with --issue, --all or --couplings.');
+            throw CoreError::create(\InvalidArgumentException::class, 'architecture.cli.json_options');
         }
     }
 

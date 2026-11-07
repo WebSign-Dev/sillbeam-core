@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture;
 
+use Sillbeam\Core\I18n\CoreError;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 /**
@@ -39,17 +40,17 @@ final class DiscoveryOptionsResolver
 
         $projectDir = $container->getParameter('kernel.project_dir');
         if (!\is_string($projectDir)) {
-            throw new \LogicException('The kernel.project_dir parameter must be a string.');
+            throw CoreError::create(\LogicException::class, 'error.discovery.kernel_dir');
         }
         $projectDir = FilesystemPath::normalize($projectDir);
         $configuredRoot = $raw['root'] ?? $projectDir.'/src';
         if (!\is_string($configuredRoot)) {
-            throw new \LogicException('sillbeam.discovery.root must be a string.');
+            throw CoreError::create(\LogicException::class, 'error.discovery.root');
         }
         $root = $this->resolvePath($configuredRoot, $projectDir);
         $configuredNamespace = $raw['namespace'] ?? null;
         if (null !== $configuredNamespace && !\is_string($configuredNamespace)) {
-            throw new \LogicException('sillbeam.discovery.namespace must be a string.');
+            throw CoreError::create(\LogicException::class, 'error.discovery.namespace_type');
         }
         $namespace = null !== $configuredNamespace ? trim($configuredNamespace, '\\').'\\' : null;
 
@@ -127,7 +128,7 @@ final class DiscoveryOptionsResolver
     {
         $composerFile = $projectDir.'/composer.json';
         if (!is_file($composerFile)) {
-            throw new \LogicException('Sillbeam discovery needs an application composer.json or an explicit discovery.namespace.');
+            throw CoreError::create(\LogicException::class, 'error.discovery.composer');
         }
 
         $composer = json_decode((string) file_get_contents($composerFile), true, flags: \JSON_THROW_ON_ERROR);
@@ -152,7 +153,7 @@ final class DiscoveryOptionsResolver
         $mappings = array_values($mappings);
         usort($mappings, static fn (array $left, array $right): int => \strlen($right['path']) <=> \strlen($left['path']));
         if ([] === $mappings || (isset($mappings[1]) && \strlen($mappings[0]['path']) === \strlen($mappings[1]['path']))) {
-            throw new \LogicException(\sprintf('Cannot determine an unambiguous PSR-4 namespace for Sillbeam discovery root "%s". Configure sillbeam.discovery.namespace.', $root));
+            throw CoreError::create(\LogicException::class, 'error.discovery.psr4', ['path' => $root]);
         }
 
         $suffix = trim(substr($root, \strlen($mappings[0]['path'])), '/');
@@ -172,7 +173,7 @@ final class DiscoveryOptionsResolver
         foreach ($roots as $root) {
             $path = $this->resolvePath($root['path'], $projectDir);
             if (!is_dir($path)) {
-                throw new \LogicException('Configured discovery directory does not exist: '.$path);
+                throw CoreError::create(\LogicException::class, 'error.discovery.missing_directory', ['path' => $path]);
             }
             $namespace = isset($root['namespace']) ? trim($root['namespace'], '\\').'\\' : $this->resolveNamespace($projectDir, $path);
             $this->validateNamespace($namespace);
@@ -185,7 +186,7 @@ final class DiscoveryOptionsResolver
     private function validateNamespace(string $namespace): void
     {
         if (!preg_match('/^(?:[a-zA-Z_][a-zA-Z0-9_]*\\\\)+$/D', $namespace)) {
-            throw new \LogicException('Invalid discovery namespace: '.$namespace);
+            throw CoreError::create(\LogicException::class, 'error.discovery.invalid_namespace', ['namespace' => $namespace]);
         }
     }
 }

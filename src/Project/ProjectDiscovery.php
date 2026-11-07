@@ -8,6 +8,7 @@ use Sillbeam\Core\Architecture\ArchitectureValidationException;
 use Sillbeam\Core\Architecture\DiscoveryOptions;
 use Sillbeam\Core\Architecture\IdDeriver;
 use Sillbeam\Core\Architecture\SourceInspector;
+use Sillbeam\Core\I18n\CoreMessage;
 use Sillbeam\Core\Project\Attribute\SillbeamProject;
 
 /**
@@ -31,13 +32,13 @@ final readonly class ProjectDiscovery
                 $allowed = $allowed || $root->contains($file);
             }
             if (!$allowed) {
-                throw ArchitectureValidationException::fatal('discovery.project_boundary', 'Project descriptor "'.$class.'" is outside the allowed project discovery boundaries.', ['file' => $file, 'project' => $class]);
+                throw ArchitectureValidationException::fatalMessage('discovery.project_boundary', new CoreMessage('finding.discovery.project_boundary', ['class' => $class]), ['file' => $file, 'project' => $class]);
             }
             $metadata = $this->inspector->metadata($class, $file, SillbeamProject::class);
             $directory = \dirname($file);
             foreach ($projects as $known) {
                 if ($directory === $known->directory || str_starts_with($directory.'/', $known->directory.'/') || str_starts_with($known->directory.'/', $directory.'/')) {
-                    throw ArchitectureValidationException::fatal('discovery.project_overlap', 'Sillbeam descriptors have overlapping project areas: '.$class.' and '.$known->class, ['file' => $file, 'project' => $class]);
+                    throw ArchitectureValidationException::fatalMessage('discovery.project_overlap', new CoreMessage('finding.discovery.project_overlap', ['class' => $class, 'other' => $known->class]), ['file' => $file, 'project' => $class]);
                 }
             }
             $projects[$class] = new ProjectDefinition(

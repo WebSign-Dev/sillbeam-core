@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getsillbeam.websign.de/schemas/core-data-analysis.v1.schema.json",
+  "title": "Sillbeam Core Data analysis v1",
+  "type": "object",
+  "properties": {
+    "document_type": {
+      "const": "sillbeam_core_data"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "profile": {
+      "const": "analysis"
+    },
+    "metadata": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/metadata"
+    },
+    "i18n": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/i18n"
+    },
+    "analysis": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/analysisStatus"
+    },
+    "export": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/exportStatus"
+    },
+    "completeness": {
+      "type": "object",
+      "properties": {
+        "architecture": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_collected"
+          ]
+        },
+        "diagnostics": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_collected"
+          ]
+        },
+        "references": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_collected"
+          ]
+        },
+        "graph": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_collected"
+          ]
+        },
+        "source_inventory": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_collected"
+          ]
+        },
+        "doctor": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_collected"
+          ]
+        }
+      },
+      "required": [
+        "architecture",
+        "diagnostics",
+        "references",
+        "graph",
+        "source_inventory",
+        "doctor"
+      ],
+      "additionalProperties": false
+    },
+    "summary": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/summary"
+    },
+    "architecture": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/architecture"
+    },
+    "diagnostics": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/diagnostics"
+    },
+    "references": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/references"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "core-data-common.v1.schema.json#/$defs/exportError"
+      }
+    },
+    "extensions": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/extensions"
+    },
+    "graph": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/graph"
+    },
+    "source_inventory": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/sourceInventory"
+    },
+    "doctor": {
+      "$ref": "core-data-common.v1.schema.json#/$defs/doctor"
+    }
+  },
+  "required": [
+    "document_type",
+    "schema_version",
+    "profile",
+    "metadata",
+    "i18n",
+    "analysis",
+    "export",
+    "completeness",
+    "summary",
+    "architecture",
+    "diagnostics",
+    "references",
+    "errors",
+    "extensions",
+    "graph",
+    "source_inventory",
+    "doctor"
+  ],
+  "additionalProperties": false
+}

@@ -11,6 +11,8 @@ use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
 use Sillbeam\Core\Architecture\DiscoveryOptionsResolver;
 use Sillbeam\Core\DependencyInjection\Configuration;
+use Sillbeam\Core\I18n\CoreError;
+use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\Yaml\Yaml;
@@ -23,28 +25,29 @@ use Symfony\Component\Yaml\Yaml;
 final class InstallationInspector
 {
     /** @return list<array{id: string, label: string, status: string, detail: string}> */
-    public function inspect(string $directory, string $environment, ?string $kernelFile = null): array
+    public function inspect(string $directory, string $environment, ?string $kernelFile = null, CoreTranslator $translator = new CoreTranslator()): array
     {
         $checks = [];
         $add = static function (string $id, string $label, string $status, string $detail = '') use (&$checks): void {
             $checks[] = compact('id', 'label', 'status', 'detail');
         };
-        foreach (['bundle.registration' => 'Bundle registration', 'console.adapter' => 'Console adapter'] as $id => $label) {
+        foreach (['bundle.registration', 'console.adapter'] as $id) {
+            $label = $translator->text('doctor.check.'.$id);
             try {
-                $nodes = $this->php($directory.('Bundle registration' === $label ? '/config/bundles.php' : '/bin/console'));
-                if ('Bundle registration' === $label) {
+                $nodes = $this->php($directory.('bundle.registration' === $id ? '/config/bundles.php' : '/bin/console'), $translator);
+                if ('bundle.registration' === $id) {
                     if (1 !== \count($nodes) || !$nodes[0] instanceof Node\Stmt\Return_ || !$nodes[0]->expr instanceof Node\Expr\Array_) {
-                        throw new \RuntimeException('config/bundles.php is dynamic.');
+                        throw new \RuntimeException($translator->text('doctor.bundle.dynamic'));
                     }
                     $enabled = false;
                     foreach ($nodes[0]->expr->items as $item) {
                         if (null === $item || !$item->key instanceof Node\Expr\ClassConstFetch || !$item->key->class instanceof Node\Name || !$item->key->name instanceof Node\Identifier || 'class' !== strtolower($item->key->name->toString()) || $item->unpack || !$item->value instanceof Node\Expr\Array_) {
-                            throw new \RuntimeException('Non-literal bundle declaration.');
+                            throw new \RuntimeException($translator->text('doctor.bundle.non_literal'));
                         }
                         $flags = [];
                         foreach ($item->value->items as $flag) {
                             if (null === $flag || !$flag->key instanceof Node\Scalar\String_ || !$flag->value instanceof Node\Expr\ConstFetch || !\in_array(strtolower($flag->value->name->toString()), ['true', 'false'], true)) {
-                                throw new \RuntimeException('Dynamic bundle environment flag.');
+                                throw new \RuntimeException($translator->text('doctor.bundle.dynamic_flag'));
                             }
                             $flags[$flag->key->value] = 'true' === strtolower($flag->value->name->toString());
                         }
@@ -52,38 +55,38 @@ final class InstallationInspector
                             $enabled = $flags[$environment] ?? $flags['all'] ?? false;
                         }
                     }
-                    $add($id, $label, $enabled ? 'verified' : 'action required', $enabled ? '' : 'In config/bundles.php, enable Sillbeam\\Core\\SillbeamCoreBundle::class in the existing bundle array. For all environments use [\'all\' => true]; an explicit \''.$environment.'\' => false overrides it. Preserve other bundles.');
+                    $add($id, $label, $enabled ? 'verified' : 'action required', $enabled ? '' : $translator->text('doctor.bundle.enable', ['environment' => $environment]));
                 } else {
                     $adapter = $this->consoleAdapter($nodes);
                     if ('Sillbeam\\Core\\Console\\Application' === $adapter) {
                         $add($id, $label, 'verified');
                     } elseif ('Symfony\\Bundle\\FrameworkBundle\\Console\\Application' === $adapter) {
-                        $add($id, $label, 'action required', 'In bin/console use Sillbeam\\Core\\Console\\Application; instead of the Symfony Console Application import, or change its fully qualified construction. Preserve the existing bootstrap and Kernel, including import aliases. This adapter makes Doctor available even when the bundle is missing or container compilation fails.');
+                        $add($id, $label, 'action required', $translator->text('doctor.console.replace'));
                     } else {
-                        throw new \RuntimeException('bin/console uses an ambiguous or unsupported bootstrap. Manually verify use Sillbeam\\Core\\Console\\Application; and its construction.');
+                        throw new \RuntimeException($translator->text('doctor.console.ambiguous'));
                     }
                 }
             } catch (\Throwable $error) {
-                $add($id, $label, 'not verified', $error->getMessage().' Review this file manually.');
+                $add($id, $label, 'not verified', $translator->text('doctor.configuration.review_file', ['error' => CoreError::render($error, $translator)]));
             }
         }
         $kernelKnown = false;
         try {
-            $nodes = $this->php($kernelFile ?? $directory.'/src/Kernel.php');
+            $nodes = $this->php($kernelFile ?? $directory.'/src/Kernel.php', $translator);
             if (!$this->standardKernel($nodes)) {
-                throw new \RuntimeException('Custom or unavailable Kernel loading hooks.');
+                throw new \RuntimeException($translator->text('doctor.configuration.kernel_unknown'));
             }
             $kernelKnown = true;
-            $add('configuration.loading', 'Configuration loading convention', 'verified');
+            $add('configuration.loading', $translator->text('doctor.check.configuration.loading'), 'verified');
         } catch (\Throwable $error) {
-            $add('configuration.loading', 'Configuration loading convention', 'not verified', $error->getMessage().' Manually verify which bundle, route, service and discovery files the selected Kernel loads.');
+            $add('configuration.loading', $translator->text('doctor.check.configuration.loading'), 'not verified', $translator->text('doctor.configuration.review_kernel', ['error' => CoreError::render($error, $translator)]));
         }
         $documents = [];
         $unknown = ['route' => !$kernelKnown, 'discovery' => !$kernelKnown, 'service' => !$kernelKnown];
         try {
             $configDir = $directory.'/config';
             if (!is_dir($configDir)) {
-                throw new \RuntimeException('Missing config directory.');
+                throw new \RuntimeException($translator->text('doctor.configuration.missing'));
             }
             foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($configDir, \FilesystemIterator::SKIP_DOTS)) as $file) {
                 $path = $file->getPathname();
@@ -112,12 +115,12 @@ final class InstallationInspector
                     continue;
                 }
                 try {
-                    $data = Yaml::parse($this->read($path));
+                    $data = Yaml::parse($this->read($path, $translator));
                     if (null === $data) {
                         $data = [];
                     }
                     if (!\is_array($data)) {
-                        throw new \RuntimeException('Expected YAML mapping in '.$relative);
+                        throw new \RuntimeException($translator->text('doctor.configuration.yaml_mapping', ['path' => $relative]));
                     }
                     foreach ($data as $key => $overlay) {
                         if (\is_string($key) && str_starts_with($key, 'when@')) {
@@ -129,7 +132,7 @@ final class InstallationInspector
                         }
                     }
                     if (isset($data['services']) && !\is_array($data['services'])) {
-                        throw new \RuntimeException('Invalid services mapping in '.$relative);
+                        throw new \RuntimeException($translator->text('doctor.configuration.services_mapping', ['path' => $relative]));
                     }
                     if (isset($data['imports'])) {
                         $this->markUnknown($unknown, $routing);
@@ -137,12 +140,12 @@ final class InstallationInspector
                     $documents[$path] = $data;
                 } catch (\Throwable $error) {
                     $this->markUnknown($unknown, $routing);
-                    $add('configuration.files', 'Configuration files', 'not verified', $relative.': '.$error->getMessage().' Review configuration manually.');
+                    $add('configuration.files', $translator->text('doctor.check.configuration.files'), 'not verified', $translator->text('doctor.configuration.review_named', ['file' => $relative, 'error' => CoreError::render($error, $translator)]));
                 }
             }
         } catch (\Throwable $error) {
             $unknown = ['route' => true, 'discovery' => true, 'service' => true];
-            $add('configuration.files', 'Configuration files', 'not verified', $error->getMessage().' Review configuration manually.');
+            $add('configuration.files', $translator->text('doctor.check.configuration.files'), 'not verified', $translator->text('doctor.configuration.review', ['error' => CoreError::render($error, $translator)]));
         }
         $routeImports = [];
         $routeUnknown = $unknown['route'];
@@ -171,16 +174,16 @@ final class InstallationInspector
             }
         }
         $routeDetail = match (true) {
-            $routeUnknown => 'Review route imports and options manually; dynamic/imported configuration is unresolved. Confirm exactly one effective type: sillbeam import; do not add another blindly.',
-            [] === $routeImports => 'Add exactly one import in config/routes/sillbeam.yaml (or existing config/routes.yaml): sillbeam: { resource: ., type: sillbeam }. Preserve existing routes; do not duplicate an import installed by Flex.',
-            \count($routeImports) > 1 => implode(', ', $routeImports).' declares multiple Sillbeam imports. Keep exactly one effective import; the loader can only run once. Remove a duplicate only after reviewing the existing routing configuration.',
+            $routeUnknown => $translator->text('doctor.routing.unknown'),
+            [] === $routeImports => $translator->text('doctor.routing.add'),
+            \count($routeImports) > 1 => $translator->text('doctor.routing.duplicate', ['imports' => implode(', ', $routeImports)]),
             default => '',
         };
-        $add('routing.import', 'Route import', $routeUnknown ? 'not verified' : (1 === \count($routeImports) ? 'verified' : 'action required'), $routeDetail);
+        $add('routing.import', $translator->text('doctor.check.routing.import'), $routeUnknown ? 'not verified' : (1 === \count($routeImports) ? 'verified' : 'action required'), $routeDetail);
         $options = null;
         try {
             if ($unknown['discovery']) {
-                throw new \RuntimeException('Dynamic files, imports or environment overlays may change discovery.');
+                throw new \RuntimeException($translator->text('doctor.discovery.dynamic'));
             }
             $configs = [];
             $discoveryDeclarations = 0;
@@ -188,20 +191,20 @@ final class InstallationInspector
                 if (!preg_match('~/config/routes(?:/|\.yaml$)~', $path) && isset($data['sillbeam'])) {
                     $configs[] = $data['sillbeam'];
                     if (isset($data['sillbeam']['discovery']) && ++$discoveryDeclarations > 1) {
-                        throw new \RuntimeException('Multiple discovery declarations require manual merge-order verification.');
+                        throw new \RuntimeException($translator->text('doctor.discovery.merge_order'));
                     }
                 }
             }
             $config = (new Processor())->processConfiguration(new Configuration(), $configs);
             if (preg_match('/%[^%]+%/', str_replace('%kernel.project_dir%', $directory, json_encode($config, \JSON_THROW_ON_ERROR)))) {
-                throw new \RuntimeException('Unresolved discovery parameters.');
+                throw new \RuntimeException($translator->text('doctor.discovery.parameters'));
             }
             $container = new ContainerBuilder();
             $container->setParameter('kernel.project_dir', $directory);
             $options = (new DiscoveryOptionsResolver())->resolve($container, $configs, $config);
-            $add('discovery.configuration', 'Discovery configuration', 'verified');
+            $add('discovery.configuration', $translator->text('doctor.check.discovery.configuration'), 'verified');
         } catch (\Throwable $error) {
-            $add('discovery.configuration', 'Discovery configuration', 'not verified', $error->getMessage().' Manually check discovery roots, namespaces and Composer mappings.');
+            $add('discovery.configuration', $translator->text('doctor.check.discovery.configuration'), 'not verified', $translator->text('doctor.discovery.review', ['error' => CoreError::render($error, $translator)]));
         }
         $serviceUnknown = $unknown['service'] || null === $options;
         $overlaps = [];
@@ -265,13 +268,13 @@ final class InstallationInspector
         }
         if ([] !== $overlaps) {
             foreach ($overlaps as $import => $areas) {
-                $add('services.imports', 'Service imports', 'action required', $import.' overlaps discovery areas. These imports can bypass activation. Exclude complete module and Project discovery areas from Symfony resource imports; let Sillbeam register their services. Add these paths to this import\'s existing exclude list: '.implode(', ', array_unique($areas)).'. Preserve existing exclusions and explicit services.'.($serviceUnknown ? ' Additional unresolved configuration may override these declarations; verify effective imports manually.' : ''));
+                $add('services.imports', $translator->text('doctor.check.services.imports'), 'action required', $translator->text('doctor.services.overlap', ['import' => $import, 'areas' => implode(', ', array_unique($areas))]).($serviceUnknown ? $translator->text('doctor.services.overrides') : ''));
             }
         }
         if ($serviceUnknown) {
-            $add('services.imports', 'Service imports', 'not verified', 'Manually check unresolved service resources, excludes, imports and overrides against module/Project areas.');
+            $add('services.imports', $translator->text('doctor.check.services.imports'), 'not verified', $translator->text('doctor.services.unknown'));
         } elseif ([] === $overlaps) {
-            $add('services.imports', 'Service imports', 'verified');
+            $add('services.imports', $translator->text('doctor.check.services.imports'), 'verified');
         }
 
         return $checks;
@@ -400,20 +403,20 @@ final class InstallationInspector
         }
     }
 
-    private function read(string $path): string
+    private function read(string $path, CoreTranslator $translator): string
     {
         $contents = @file_get_contents($path);
         if (false === $contents) {
-            throw new \RuntimeException('Cannot read '.$path);
+            throw new \RuntimeException($translator->text('doctor.configuration.unreadable', ['path' => $path]));
         }
 
         return $contents;
     }
 
     /** @return array<Node> */
-    private function php(string $path): array
+    private function php(string $path, CoreTranslator $translator): array
     {
-        $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse($this->read($path)) ?? [];
+        $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse($this->read($path, $translator)) ?? [];
 
         return (new NodeTraverser(new NameResolver()))->traverse($nodes);
     }

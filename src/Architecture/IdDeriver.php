@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture;
 
+use Sillbeam\Core\I18n\CoreMessage;
+
 /**
  * Derives lowercase hyphenated IDs from descriptor class names after removing their suffix.
  *
@@ -20,7 +22,7 @@ final class IdDeriver
 
         $id = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $shortName));
         if ('' === $id || !preg_match('/^[a-z][a-z0-9-]*$/', $id)) {
-            throw ArchitectureValidationException::fatal('discovery.descriptor_id', \sprintf('Cannot derive a valid Sillbeam id from "%s".', $class), ['class' => $class, 'file' => $file]);
+            throw ArchitectureValidationException::fatalMessage('discovery.descriptor_id', new CoreMessage('finding.discovery.descriptor_id', ['class' => $class]), ['class' => $class, 'file' => $file]);
         }
 
         return $id;

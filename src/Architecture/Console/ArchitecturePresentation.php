@@ -8,15 +8,16 @@ use Sillbeam\Core\Architecture\ArchitectureAnalysisResult;
 use Sillbeam\Core\Architecture\ArchitectureFinding;
 use Sillbeam\Core\Architecture\Diagnostic\DiagnosticCollection;
 use Sillbeam\Core\Architecture\Diagnostic\DiagnosticContext;
+use Sillbeam\Core\I18n\CoreTranslator;
 
 /** @internal Scalar human view of actual diagnostic evidence, separate from schema-1 JSON. */
 final class ArchitecturePresentation
 {
     /** @return array<string, mixed> */
-    public static function fromAnalysis(ArchitectureAnalysisResult $analysis, ?string $projectDir = null): array
+    public static function fromAnalysis(ArchitectureAnalysisResult $analysis, ?string $projectDir = null, CoreTranslator $translator = new CoreTranslator()): array
     {
         $context = DiagnosticContext::fromAnalysis($analysis);
-        $collection = DiagnosticCollection::fromAnalysis($analysis);
+        $collection = DiagnosticCollection::fromContext($analysis->findings, $context, $translator);
         $root = $projectDir ?? $analysis->discovery?->root;
         if (null !== $root && 'src' === basename($root)) {
             $root = \dirname($root);
@@ -42,12 +43,12 @@ final class ArchitecturePresentation
         foreach ($collection->diagnoses as $diagnosis) {
             $first = $diagnosis->findings[0];
             $rule = $first->rule;
-            [$title, $category] = self::heading($rule, \count($diagnosis->findings));
+            [$title, $category] = self::heading($rule, \count($diagnosis->findings), $translator);
             $source = $first->context['module'] ?? $first->context['project'] ?? null;
             $target = $first->context['target'] ?? $first->context['class'] ?? null;
             $relation = [] !== $diagnosis->modules && 'declared_cycle' === $diagnosis->basis
                 ? implode(' → ', array_map(static fn (string $class): string => $labels[$class] ?? $class, $diagnosis->modules))
-                : (\is_string($source) ? ($labels[$source] ?? self::shortClass($source, 'Module')) : 'Application').(\is_string($target) ? ' → '.($labels[$target] ?? $target) : '');
+                : (\is_string($source) ? ($labels[$source] ?? self::shortClass($source, 'Module')) : $translator->text('diagnosis.heading.application')).(\is_string($target) ? ' → '.($labels[$target] ?? $target) : '');
             $summary = [];
             $impacts = [];
             $references = [];
@@ -69,7 +70,7 @@ final class ArchitecturePresentation
                 }
                 $originals[] = [
                     'finding' => get_object_vars($finding),
-                    'readable' => $readable($finding->message).(\is_string($file) ? ' At: '.self::relative($file, $root, $context).(\is_int($line) ? ':'.$line : '') : ''),
+                    'readable' => $readable($finding->localizedMessage($translator)).(\is_string($file) ? $translator->text('diagnosis.context.at', ['location' => self::relative($file, $root, $context).(\is_int($line) ? ':'.$line : '')]) : ''),
                     'technical' => '['.$finding->rule.'] '.$finding->severity.': '.$finding->message.' Context: '.json_encode($finding->context, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE),
                 ];
             }
@@ -81,7 +82,7 @@ final class ArchitecturePresentation
             $steps = [];
             foreach ($diagnosis->resolutions as $resolution) {
                 foreach ($resolution->steps as $step) {
-                    $steps[] = ('option' === $resolution->kind ? 'Domain option: ' : '').$readable($step);
+                    $steps[] = ('option' === $resolution->kind ? $translator->text('diagnosis.heading.option') : '').$readable($step);
                 }
             }
             $impact = implode(' ', array_unique($impacts));
@@ -96,7 +97,7 @@ final class ArchitecturePresentation
                 'caution' => $caution ? $impact : null,
                 'steps' => array_values(array_unique($steps)), 'findings' => \count($diagnosis->findings),
                 'references' => array_values($references), 'rule' => implode(', ', array_unique($rules)),
-                'detail' => 'Evidence: '.$diagnosis->basis.'. '.implode(' ', array_unique(array_merge(...array_map(static fn ($resolution): array => $resolution->configuration, $diagnosis->resolutions)))),
+                'detail' => $translator->text('diagnosis.context.evidence', ['basis' => $diagnosis->basis]).implode(' ', array_unique(array_merge(...array_map(static fn ($resolution): array => $resolution->configuration, $diagnosis->resolutions)))),
                 'originals' => $originals,
             ];
         }
@@ -109,7 +110,7 @@ final class ArchitecturePresentation
             ksort($targets);
             foreach ($targets as $class => $evidence) {
                 $name = $labels[$source] ?? self::shortClass($source, 'Module');
-                $couplings[] = ['source' => $source, 'relation' => $name.' → '.$class, 'summary' => $name.' references application code outside its module.', 'references' => $evidence];
+                $couplings[] = ['source' => $source, 'relation' => $name.' → '.$class, 'summary' => $translator->text('diagnosis.application_reference', ['module' => $name]), 'references' => $evidence];
             }
         }
 
@@ -187,27 +188,39 @@ final class ArchitecturePresentation
     }
 
     /** @return array{string, string} */
-    private static function heading(string $rule, int $count): array
+    public static function heading(string $rule, int $count, CoreTranslator $translator = new CoreTranslator()): array
     {
         return match ($rule) {
-            'dependency.cycle' => ['Circular module dependency', 'Dependency graph'],
-            'code.undeclared_dependency' => $count > 1 ? ['Module accesses are not declared', 'Missing declarations'] : ['Undeclared module access', 'Dependency declaration'],
-            'code.unknown_class' => [$count > 1 ? 'Application classes cannot be resolved' : 'Application class cannot be resolved', 'Unresolved source'],
-            'dependency.disabled' => ['A required module is disabled', 'Activation'],
-            'code.inactive' => ['A required module is inactive', 'Activation'],
-            'dependency.private', 'code.private', 'project.private_module' => ['Private module used outside its Project', 'Project boundary'],
-            'dependency.unknown' => ['Unknown module dependency', 'Dependency declaration'],
-            'project.unknown_module' => ['Project requires an unknown module', 'Activation'],
-            'module.duplicate_key', 'project.duplicate_id' => ['Duplicate architecture identity', 'Identity'],
-            'project.host_required' => ['Project needs an exact host', 'Project hosts'],
-            'project.host_invalid' => ['Invalid Project host', 'Project hosts'],
-            'project.host_duplicate' => ['Host assigned to multiple Projects', 'Project hosts'],
-            'module.unknown_override', 'project.unknown_configuration' => ['Configuration refers to an unknown area', 'Configuration'],
-            'source.parse' => ['PHP source cannot be parsed', 'Analysis incomplete'],
-            'source.read' => ['PHP source cannot be read', 'Analysis incomplete'],
-            'source.duplicate_class' => ['Duplicate PHP class declaration', 'Analysis incomplete'],
-            'report.execution' => ['Architecture check could not run', 'Analysis incomplete'],
-            default => [ucfirst(str_replace(['.', '_'], ' ', $rule)), 'Architecture'],
+            'dependency.cycle' => [$translator->text('diagnosis.heading.cycle'), $translator->text('diagnosis.heading.graph')],
+            'code.undeclared_dependency' => $count > 1 ? [$translator->text('diagnosis.heading.undeclared_plural'), $translator->text('diagnosis.heading.missing_declarations')] : [$translator->text('diagnosis.heading.undeclared'), $translator->text('diagnosis.heading.declaration')],
+            'code.unknown_class' => [$count > 1 ? $translator->text('diagnosis.heading.classes_unresolved') : $translator->text('diagnosis.heading.class_unresolved'), $translator->text('diagnosis.heading.unresolved')],
+            'dependency.disabled' => [$translator->text('diagnosis.heading.disabled'), $translator->text('diagnosis.heading.activation')],
+            'code.inactive' => [$translator->text('diagnosis.heading.inactive'), $translator->text('diagnosis.heading.activation')],
+            'dependency.private', 'code.private', 'project.private_module' => [$translator->text('diagnosis.heading.private'), $translator->text('diagnosis.heading.boundary')],
+            'dependency.unknown' => [$translator->text('diagnosis.heading.unknown_dependency'), $translator->text('diagnosis.heading.declaration')],
+            'project.unknown_module' => [$translator->text('diagnosis.heading.unknown_module'), $translator->text('diagnosis.heading.activation')],
+            'module.duplicate_key', 'project.duplicate_id' => [$translator->text('diagnosis.heading.duplicate'), $translator->text('diagnosis.heading.identity')],
+            'project.host_required' => [$translator->text('diagnosis.heading.host_required'), $translator->text('diagnosis.heading.hosts')],
+            'project.host_invalid' => [$translator->text('diagnosis.heading.host_invalid'), $translator->text('diagnosis.heading.hosts')],
+            'project.host_duplicate' => [$translator->text('diagnosis.heading.host_duplicate'), $translator->text('diagnosis.heading.hosts')],
+            'module.unknown_override', 'project.unknown_configuration' => [$translator->text('diagnosis.heading.unknown_configuration'), $translator->text('diagnosis.heading.configuration')],
+            'source.parse' => [$translator->text('diagnosis.heading.parse'), $translator->text('diagnosis.heading.incomplete')],
+            'source.read' => [$translator->text('diagnosis.heading.read'), $translator->text('diagnosis.heading.incomplete')],
+            'source.duplicate_class' => [$translator->text('diagnosis.heading.duplicate_class'), $translator->text('diagnosis.heading.incomplete')],
+            'report.execution' => [$translator->text('diagnosis.heading.execution'), $translator->text('diagnosis.heading.incomplete')],
+            'discovery.owner_missing' => [$translator->text('diagnosis.heading.discovery.owner_missing'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.module_boundary' => [$translator->text('diagnosis.heading.discovery.module_boundary'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.project_boundary' => [$translator->text('diagnosis.heading.discovery.project_boundary'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.module_overlap' => [$translator->text('diagnosis.heading.discovery.module_overlap'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.project_overlap' => [$translator->text('diagnosis.heading.discovery.project_overlap'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.project_inside_module' => [$translator->text('diagnosis.heading.discovery.project_inside_module'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.descriptor_class' => [$translator->text('diagnosis.heading.discovery.descriptor_class'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.descriptor_file' => [$translator->text('diagnosis.heading.discovery.descriptor_file'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.descriptor_metadata' => [$translator->text('diagnosis.heading.discovery.descriptor_metadata'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.descriptor_id' => [$translator->text('diagnosis.heading.discovery.descriptor_id'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.multiple_descriptors' => [$translator->text('diagnosis.heading.discovery.multiple_descriptors'), $translator->text('diagnosis.heading.architecture')],
+            'discovery.multiple_attributes' => [$translator->text('diagnosis.heading.discovery.multiple_attributes'), $translator->text('diagnosis.heading.architecture')],
+            default => [ucfirst(str_replace(['.', '_'], ' ', $rule)), $translator->text('diagnosis.heading.architecture')],
         };
     }
 }

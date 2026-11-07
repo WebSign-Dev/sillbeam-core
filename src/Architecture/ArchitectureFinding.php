@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture;
 
+use Sillbeam\Core\I18n\CoreMessage;
+use Sillbeam\Core\I18n\CoreTranslator;
+
 /**
  * One architecture rule violation with scalar source context and error or fatal severity.
  *
@@ -27,38 +30,64 @@ final readonly class ArchitectureFinding
         public string $message,
         public array $context = [],
         public string $severity = 'error',
+        private ?CoreMessage $resource = null,
     ) {
+    }
+
+    /** @internal
+     * @param array<string, string|int|null> $context
+     * @param 'error'|'fatal'                $severity
+     */
+    public static function fromMessage(string $rule, CoreMessage $resource, array $context = [], string $severity = 'error'): self
+    {
+        return new self($rule, $resource->render(), $context, $severity, $resource);
+    }
+
+    public function localizedMessage(CoreTranslator $translator): string
+    {
+        return ($this->resource ?? null)?->render($translator) ?? $this->message;
+    }
+
+    /** @internal */
+    public function withSortedContext(): self
+    {
+        $context = $this->context;
+        ksort($context);
+
+        return new self($this->rule, $this->message, $context, $this->severity, $this->resource ?? null);
     }
 
     /**
      * Returns a rule-specific remediation hint, or null for rules without a known hint.
      */
-    public function suggestion(): ?string
+    public function suggestion(CoreTranslator $translator = new CoreTranslator()): ?string
     {
-        return match ($this->rule) {
-            'dependency.unknown', 'project.unknown_module' => 'Correct the referenced module class or add its descriptor inside the configured discovery roots.',
-            'module.unknown_override', 'project.unknown_configuration' => 'Use the ID of a discovered module or project, or remove the stale configuration key.',
-            'dependency.private', 'code.private', 'project.private_module' => 'Keep private modules within their owning Project; move reusable contracts or code into a shared module.',
-            'dependency.cycle' => 'Remove a dependency in the reported cycle or extract shared contracts to break it.',
-            'dependency.disabled', 'code.inactive' => 'Enable and activate the required module in this graph, or remove the dependency/reference.',
-            'code.unknown_class' => 'Correct the class name or import, restore the class, or configure its Composer autoload mapping and regenerate the autoloader.',
-            'code.undeclared_dependency' => 'Declare the target module as a direct dependency in the source module descriptor.',
-            'module.duplicate_key', 'project.duplicate_id' => 'Give the descriptors unique IDs within their scope.',
-            'module.owner_missing', 'discovery.owner_missing' => 'Place the module inside its owning Project or a configured shared-module root.',
-            'project.host_invalid' => 'Use an exact hostname without scheme, port, path or wildcard.',
-            'project.host_required' => 'Configure at least one exact host for each Project in a multi-Project application.',
-            'project.host_duplicate' => 'Assign each exact host to only one Project.',
-            'source.parse' => 'Fix the reported PHP syntax error before rebuilding.',
-            'source.read' => 'Restore the source file and ensure the build process can read it.',
-            'source.duplicate_class' => 'Remove or rename the duplicate PHP class declaration.',
-            'discovery.descriptor_metadata', 'discovery.descriptor_id' => 'Correct the descriptor attribute arguments and use a valid lowercase ID, or a class name from which one can be derived.',
-            'discovery.descriptor_class', 'discovery.descriptor_file' => 'Align the descriptor class, filename and Composer PSR-4 namespace.',
-            'discovery.module_overlap', 'discovery.project_overlap', 'discovery.project_inside_module' => 'Separate the reported architecture areas so ownership is unambiguous.',
-            'discovery.module_boundary', 'discovery.project_boundary' => 'Move the descriptor into the matching configured discovery root.',
-            'discovery.multiple_descriptors', 'discovery.multiple_attributes' => 'Declare one unambiguous Module or Project descriptor per descriptor file/class.',
-            'report.execution' => 'Correct the reported configuration or execution failure and rerun the architecture report.',
+        $key = match ($this->rule) {
+            'dependency.unknown', 'project.unknown_module' => 'finding.hint.dependency.unknown',
+            'module.unknown_override', 'project.unknown_configuration' => 'finding.hint.module.unknown_override',
+            'dependency.private', 'code.private', 'project.private_module' => 'finding.hint.dependency.private',
+            'dependency.cycle' => 'finding.hint.dependency.cycle',
+            'dependency.disabled', 'code.inactive' => 'finding.hint.dependency.disabled',
+            'code.unknown_class' => 'finding.hint.code.unknown_class',
+            'code.undeclared_dependency' => 'finding.hint.code.undeclared_dependency',
+            'module.duplicate_key', 'project.duplicate_id' => 'finding.hint.module.duplicate_key',
+            'module.owner_missing', 'discovery.owner_missing' => 'finding.hint.module.owner_missing',
+            'project.host_invalid' => 'finding.hint.project.host_invalid',
+            'project.host_required' => 'finding.hint.project.host_required',
+            'project.host_duplicate' => 'finding.hint.project.host_duplicate',
+            'source.parse' => 'finding.hint.source.parse',
+            'source.read' => 'finding.hint.source.read',
+            'source.duplicate_class' => 'finding.hint.source.duplicate_class',
+            'discovery.descriptor_metadata', 'discovery.descriptor_id' => 'finding.hint.discovery.descriptor_metadata',
+            'discovery.descriptor_class', 'discovery.descriptor_file' => 'finding.hint.discovery.descriptor_class',
+            'discovery.module_overlap', 'discovery.project_overlap', 'discovery.project_inside_module' => 'finding.hint.discovery.module_overlap',
+            'discovery.module_boundary', 'discovery.project_boundary' => 'finding.hint.discovery.module_boundary',
+            'discovery.multiple_descriptors', 'discovery.multiple_attributes' => 'finding.hint.discovery.multiple_descriptors',
+            'report.execution' => 'finding.hint.report.execution',
             default => null,
         };
+
+        return null === $key ? null : $translator->text($key);
     }
 
     /**

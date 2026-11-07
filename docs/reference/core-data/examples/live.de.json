@@ -1,0 +1,220 @@
+{
+  "document_type": "sillbeam_core_data",
+  "schema_version": 1,
+  "profile": "live",
+  "metadata": {
+    "core_version": "0.4.0",
+    "analysis_run_id": "4f87c7c4-0f50-4d73-9cf5-c597e8cb78de",
+    "analyzed_at": "2026-11-07T13:00:00Z",
+    "duration_ms": 175,
+    "php_version": "8.4.0",
+    "symfony_version": "7.4.0",
+    "architecture_fingerprint": null,
+    "fingerprint_version": null
+  },
+  "i18n": {
+    "default_locale": "en",
+    "available_locales": [
+      "en",
+      "de"
+    ],
+    "included_locales": [
+      "de"
+    ],
+    "requested_locale": "de",
+    "fallbacks": []
+  },
+  "analysis": {
+    "status": "violations",
+    "valid": false,
+    "complete": true
+  },
+  "export": {
+    "status": "complete"
+  },
+  "completeness": {
+    "architecture": "complete",
+    "diagnostics": "complete",
+    "references": "complete"
+  },
+  "summary": {
+    "module_count": 2,
+    "project_count": 0,
+    "finding_count": 1,
+    "diagnosis_count": 1,
+    "module_reference_count": 1,
+    "application_reference_count": 1
+  },
+  "architecture": {
+    "modules": [
+      {
+        "id": "billing",
+        "class": "App\\Module\\Billing\\BillingModule",
+        "description": "Billing module",
+        "namespace": "App\\Module\\Billing",
+        "scope": "shared",
+        "project": null,
+        "directory": "src/Module/Billing",
+        "descriptor": "src/Module/Billing/BillingModule.php",
+        "enabled": true,
+        "active": null,
+        "inactive_reason": "unknown",
+        "declared_dependencies": [],
+        "observed_dependencies": [
+          "App\\Module\\Catalog\\CatalogModule"
+        ],
+        "activation_reasons": null,
+        "controllers": [],
+        "entities": [],
+        "configuration": {
+          "key": "shared:billing",
+          "override_source": null,
+          "enabled_override": null
+        },
+        "project_states": []
+      },
+      {
+        "id": "catalog",
+        "class": "App\\Module\\Catalog\\CatalogModule",
+        "description": "Catalog module",
+        "namespace": "App\\Module\\Catalog",
+        "scope": "shared",
+        "project": null,
+        "directory": "src/Module/Catalog",
+        "descriptor": "src/Module/Catalog/CatalogModule.php",
+        "enabled": true,
+        "active": null,
+        "inactive_reason": "unknown",
+        "declared_dependencies": [],
+        "observed_dependencies": [],
+        "activation_reasons": null,
+        "controllers": [],
+        "entities": [],
+        "configuration": {
+          "key": "shared:catalog",
+          "override_source": null,
+          "enabled_override": null
+        },
+        "project_states": []
+      }
+    ],
+    "projects": []
+  },
+  "diagnostics": {
+    "findings": [
+      {
+        "index": 0,
+        "rule": "code.undeclared_dependency",
+        "severity": "error",
+        "message": "Module billing uses an undeclared module dependency.",
+        "context": {
+          "module": "App\\Module\\Billing\\BillingModule",
+          "target": "App\\Module\\Catalog\\CatalogModule",
+          "file": "src/Module/Billing/BillingService.php",
+          "line": 42
+        },
+        "location": {
+          "path": "src/Module/Billing/BillingService.php",
+          "line": 42,
+          "column": null
+        },
+        "diagnosis_id": "D1",
+        "translations": {
+          "de": {
+            "message": "Das Modul billing verwendet eine nicht deklarierte Modulabhängigkeit.",
+            "hint": "Deklariere die direkte Abhängigkeit im Modul-Descriptor."
+          }
+        }
+      }
+    ],
+    "diagnoses": [
+      {
+        "id": "D1",
+        "correlation_key": null,
+        "correlation_version": null,
+        "basis": "observed_reference",
+        "severity": "error",
+        "rule_codes": [
+          "code.undeclared_dependency"
+        ],
+        "finding_indexes": [
+          0
+        ],
+        "modules": [
+          "App\\Module\\Billing\\BillingModule",
+          "App\\Module\\Catalog\\CatalogModule"
+        ],
+        "descriptors": {
+          "App\\Module\\Billing\\BillingModule": "src/Module/Billing/BillingModule.php",
+          "App\\Module\\Catalog\\CatalogModule": "src/Module/Catalog/CatalogModule.php"
+        },
+        "details": [
+          {
+            "finding_index": 0,
+            "caution": false,
+            "translations": {
+              "de": {
+                "problem": "Eine Modulgrenze wird ohne deklarierte Abhängigkeit überschritten.",
+                "impact": "Die tatsächliche Abhängigkeit ist nicht vollständig deklariert."
+              }
+            }
+          }
+        ],
+        "translations": {
+          "de": {
+            "title": "Nicht deklarierte Modulabhängigkeit",
+            "category": "Modulabhängigkeiten",
+            "problem": "Billing verwendet Catalog ohne entsprechende Deklaration.",
+            "impact": "Deklarierte und beobachtete Architektur unterscheiden sich.",
+            "caution": null
+          }
+        },
+        "resolutions": [
+          {
+            "id": "R1",
+            "kind": "technical",
+            "files": [
+              "src/Module/Billing/BillingModule.php"
+            ],
+            "configuration": [],
+            "translations": {
+              "de": {
+                "steps": [
+                  "Prüfe die benötigte Abhängigkeitsrichtung.",
+                  "Deklariere die direkte Modulabhängigkeit im Billing-Descriptor."
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "references": {
+    "module": [
+      {
+        "id": "MR1",
+        "source_module": "App\\Module\\Billing\\BillingModule",
+        "target_module": "App\\Module\\Catalog\\CatalogModule",
+        "target_class": "App\\Module\\Catalog\\CatalogService",
+        "source_file": "src/Module/Billing/BillingService.php",
+        "source_line": 42,
+        "declared": false,
+        "observed": true
+      }
+    ],
+    "application": [
+      {
+        "id": "AR1",
+        "source_module": "App\\Module\\Billing\\BillingModule",
+        "target_class": "App\\Service\\Formatter",
+        "source_file": "src/Module/Billing/BillingService.php",
+        "source_line": 51,
+        "target_file": "src/Service/Formatter.php",
+        "classification": "informational"
+      }
+    ]
+  },
+  "errors": [],
+  "extensions": {}
+}

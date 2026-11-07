@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Console\Doctor;
 
 use Sillbeam\Core\Console\Style\ConsoleStyle;
+use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArgvInput;
@@ -21,15 +22,15 @@ use Symfony\Component\HttpKernel\KernelInterface;
 #[AsCommand(name: 'sillbeam:doctor', description: 'Check static Symfony installation evidence without changing files.')]
 final class DoctorCommand extends Command
 {
-    public function __construct(private readonly string $projectDir, private readonly string $environment, private readonly ?KernelInterface $kernel = null)
+    public function __construct(private readonly string $projectDir, private readonly string $environment, private readonly ?KernelInterface $kernel = null, private readonly CoreTranslator $translator = new CoreTranslator())
     {
         parent::__construct();
     }
 
     protected function configure(): void
     {
-        $this->addOption('format', null, InputOption::VALUE_REQUIRED, 'Output format: text or schema-version-1 json.', 'text');
-        $this->setHelp('Reads installation files only; never boots the Kernel or executes application configuration. Checks bundle declarations, route imports, Console adapter, service import overlap and discovery consistency. Unknown PHP/XML, imports, custom Kernel hooks and dynamic settings require manual verification. Verified means static file evidence, not effective runtime configuration. Does not replace sillbeam:architecture, PHPStan or Symfony configuration checks. Exit 0: all static checks verified; 1: action required; 2: incomplete/unexecutable (takes precedence). No files are written. --format=json emits only the complete Doctor report, including usage/execution errors when JSON is requested. --quiet suppresses output in both formats without changing the exit code. Help describes command usage; it is not a Doctor result.');
+        $this->addOption('format', null, InputOption::VALUE_REQUIRED, $this->translator->text('doctor.cli.format'), 'text');
+        $this->setHelp($this->translator->text('doctor.cli.help'));
     }
 
     /** Handles binding failures before execute(), including the ordinary Symfony entry point. */
@@ -110,13 +111,13 @@ final class DoctorCommand extends Command
     {
         $format = $input->getOption('format');
         if (!\in_array($format, ['text', 'json'], true)) {
-            return self::failure(new \InvalidArgumentException('Supported formats: text, json.'), 'doctor.usage', false, $output);
+            return self::failure(new \InvalidArgumentException($this->translator->text('doctor.cli.invalid_format')), 'doctor.usage', false, $output);
         }
         $style = new ConsoleStyle($output);
         if ('text' === $format) {
-            $style->heading('Installation');
+            $style->heading($this->translator->text('doctor.cli.title'));
         }
-        $checks = (new InstallationInspector())->inspect($this->projectDir, $this->environment, null === $this->kernel ? null : ((new \ReflectionClass($this->kernel))->getFileName() ?: ''));
+        $checks = (new InstallationInspector())->inspect($this->projectDir, $this->environment, null === $this->kernel ? null : ((new \ReflectionClass($this->kernel))->getFileName() ?: ''), 'json' === $format ? new CoreTranslator() : $this->translator);
         $report = DoctorReport::fromChecks($checks);
         if ('json' === $format) {
             if (!$output->isQuiet()) {
@@ -126,10 +127,10 @@ final class DoctorCommand extends Command
             return $report->exitCode();
         }
         $counts = $report->data['summary'];
-        $style->text(\sprintf('%d verified · %d action required · %d not verified', $counts['verified'] ?? 0, $counts['action required'] ?? 0, $counts['not verified'] ?? 0));
-        $style->text('Static file evidence only; effective runtime configuration is not certified.');
+        $style->text($this->translator->text('doctor.cli.summary', ['verified' => $counts['verified'] ?? 0, 'action' => $counts['action required'] ?? 0, 'unknown' => $counts['not verified'] ?? 0]));
+        $style->text($this->translator->text('doctor.cli.scope'));
         foreach ($checks as $check) {
-            $message = $check['label'].': '.$check['status'];
+            $message = $check['label'].': '.$this->translator->text('doctor.status.'.str_replace(' ', '_', $check['status']));
             match ($check['status']) {
                 'verified' => $style->success($message),
                 'action required' => $style->error($message),
@@ -140,8 +141,8 @@ final class DoctorCommand extends Command
             }
         }
         $style->text($counts['not verified'] > 0 || $counts['action required'] > 0
-            ? 'Next: make the reviewed changes yourself, resolve unverified checks manually, then rerun php bin/console sillbeam:doctor.'
-            : 'Next: run php bin/console sillbeam:architecture to validate descriptors and dependencies.');
+            ? $this->translator->text('doctor.cli.next_review')
+            : $this->translator->text('doctor.cli.next_architecture'));
 
         return $report->exitCode();
     }

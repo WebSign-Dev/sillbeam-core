@@ -6,6 +6,8 @@ namespace Sillbeam\Core\Architecture;
 
 use Sillbeam\Core\Architecture\Console\ArchitecturePresentation;
 use Sillbeam\Core\Architecture\Console\ModuleInspection;
+use Sillbeam\Core\I18n\CoreError;
+use Sillbeam\Core\I18n\CoreMessage;
 
 /**
  * Scalar architecture report shared by text, JSON and Markdown command output.
@@ -100,7 +102,7 @@ final readonly class ArchitectureReport
     public static function unavailable(\Throwable $error): self
     {
         return self::fromAnalysis(new ArchitectureAnalysisResult([
-            new ArchitectureFinding('report.execution', $error->getMessage(), ['exception' => $error::class], 'fatal'),
+            ArchitectureFinding::fromMessage('report.execution', new CoreMessage('finding.report.execution', ['error' => CoreError::message($error)]), ['exception' => $error::class], 'fatal'),
         ]));
     }
 

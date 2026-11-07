@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Project\Attribute;
 
+use Sillbeam\Core\I18n\CoreError;
+
 /**
  * Declares a Project descriptor and the shared modules selected by that Project.
  *
@@ -29,7 +31,7 @@ final readonly class SillbeamProject
         public array $modules = [],
     ) {
         if (null !== $id && !preg_match('/^[a-z][a-z0-9-]*$/D', $id)) {
-            throw new \InvalidArgumentException(\sprintf('Invalid Sillbeam project id "%s".', $id));
+            throw CoreError::create(\InvalidArgumentException::class, 'error.discovery.project_id', ['id' => $id]);
         }
     }
 }

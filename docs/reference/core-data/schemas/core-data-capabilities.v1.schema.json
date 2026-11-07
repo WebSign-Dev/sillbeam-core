@@ -1,0 +1,128 @@
+{
+  "type": "object",
+  "properties": {
+    "document_type": {
+      "const": "sillbeam_core_capabilities"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "core_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "default_locale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "available_locales": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "profiles": {
+      "type": "object",
+      "properties": {
+        "live": {
+          "type": "object",
+          "properties": {
+            "schema_versions": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "uniqueItems": true
+            },
+            "default_schema_version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "supports_locale_selection": {
+              "type": "boolean"
+            },
+            "domains": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "schema_versions",
+            "default_schema_version",
+            "supports_locale_selection",
+            "domains"
+          ],
+          "additionalProperties": false
+        },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "schema_versions": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "uniqueItems": true
+            },
+            "default_schema_version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "supports_locale_selection": {
+              "type": "boolean"
+            },
+            "domains": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "schema_versions",
+            "default_schema_version",
+            "supports_locale_selection",
+            "domains"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "live",
+        "analysis"
+      ],
+      "additionalProperties": false
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "document_type",
+    "schema_version",
+    "core_version",
+    "default_locale",
+    "available_locales",
+    "profiles",
+    "operations"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getsillbeam.websign.de/schemas/core-data-capabilities.v1.schema.json",
+  "title": "Sillbeam Core Data Capabilities v1"
+}

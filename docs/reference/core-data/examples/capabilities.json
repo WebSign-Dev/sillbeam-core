@@ -1,0 +1,46 @@
+{
+  "document_type": "sillbeam_core_capabilities",
+  "schema_version": 1,
+  "core_version": "0.4.0",
+  "default_locale": "en",
+  "available_locales": [
+    "en",
+    "de"
+  ],
+  "profiles": {
+    "live": {
+      "schema_versions": [
+        1
+      ],
+      "default_schema_version": 1,
+      "supports_locale_selection": true,
+      "domains": [
+        "architecture",
+        "diagnostics",
+        "references"
+      ]
+    },
+    "analysis": {
+      "schema_versions": [
+        1
+      ],
+      "default_schema_version": 1,
+      "supports_locale_selection": false,
+      "domains": [
+        "architecture",
+        "diagnostics",
+        "references",
+        "graph",
+        "source_inventory",
+        "doctor"
+      ]
+    }
+  },
+  "operations": [
+    "architecture",
+    "doctor",
+    "graph",
+    "inspect_module",
+    "inspect_sources"
+  ]
+}
