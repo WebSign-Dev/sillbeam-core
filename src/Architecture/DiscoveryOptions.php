@@ -18,6 +18,9 @@ final readonly class DiscoveryOptions
 {
     public string $root;
 
+    /** @var array<string, true> */
+    private array $requiredRoots;
+
     /** @var list<DiscoveryRoot> */
     public array $moduleRoots;
     /** @var list<DiscoveryRoot> */
@@ -52,6 +55,7 @@ final readonly class DiscoveryOptions
         $root = $this->root = FilesystemPath::normalize($root);
         $this->moduleRoots = $moduleRoots ?? [new DiscoveryRoot(FilesystemPath::directoryPrefix($root).'Module', $namespace.'Module\\')];
         $this->projectRoots = $projectRoots ?? [new DiscoveryRoot(FilesystemPath::directoryPrefix($root).'Project', $namespace.'Project\\')];
+        $this->requiredRoots = array_fill_keys([$root, ...array_column($moduleRoots ?? [], 'path'), ...array_column($projectRoots ?? [], 'path')], true);
         $namespaces = [];
         foreach ($this->roots() as $discoveryRoot) {
             if (isset($namespaces[$discoveryRoot->path]) && $namespaces[$discoveryRoot->path] !== $discoveryRoot->namespace) {
@@ -71,6 +75,12 @@ final readonly class DiscoveryOptions
     public function roots(): array
     {
         return [new DiscoveryRoot($this->root, $this->namespace), ...$this->moduleRoots, ...$this->projectRoots];
+    }
+
+    /** @internal Conventional module and Project directories are optional. */
+    public function requiresRoot(string $path): bool
+    {
+        return $path === $this->root || isset($this->requiredRoots[$path]);
     }
 
     /**

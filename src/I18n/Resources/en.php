@@ -3,6 +3,23 @@
 declare(strict_types=1);
 
 return [
+    'cli.graph.label.missing_owner_group' => 'Private modules | owner not in available Project catalog',
+    'cli.graph.label.scope_shared' => 'shared',
+    'cli.graph.label.private_owner' => 'private Project: {project}',
+    'cli.graph.label.unknown_owner' => 'unknown owner',
+    'cli.graph.label.projects' => '
+Projects: {projects}',
+    'cli.inspect.private_owner' => 'private: {project}',
+    'cli.inspect.owner_unknown' => 'unknown',
+    'cli.inspect.owner_missing' => 'unknown owner: {class}',
+    'cli.inspect.participants' => 'participants: {cycle}',
+    'cli.inspect.reference_class' => 'class {class}',
+    'cli.graph.label.title' => 'Sillbeam module architecture',
+    'cli.graph.label.invalid_utf8' => 'invalid UTF-8 label',
+    'cli.graph.label.observed_undeclared' => 'observed undeclared',
+    'cli.inspect.none_override' => 'none',
+    'cli.inspect.configured_key' => '{key} (configured key)',
+    'api.inventory.root_missing' => 'A required source root is missing.',
     'cli.make.error.name' => 'Name must start with an ASCII letter and contain only ASCII letters and digits.',
     'cli.make.error.suffix' => 'Pass the base name without the {suffix} suffix.',
     'cli.make.error.root' => 'Configure exactly one sillbeam.discovery.{type} root for creation.',

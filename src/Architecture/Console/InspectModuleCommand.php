@@ -148,8 +148,8 @@ final class InspectModuleCommand extends Command
         foreach ([
             'ID' => $module['id'], $this->translator->text('cli.inspect.descriptor_class') => $module['class'], $this->translator->text('cli.inspect.descriptor_file') => $module['descriptor'],
             $this->translator->text('cli.inspect.scope') => $module['scope'], $this->translator->text('cli.inspect.owner') => $view['owner']['id'] ?? ('shared' === $module['scope'] ? $this->translator->text('cli.inspect.none_shared') : 'unknown'),
-            $this->translator->text('cli.inspect.configuration_key') => $config['key'] ?? 'unknown',
-            $this->translator->text('cli.inspect.override') => null === $config['key'] ? 'unknown' : (null === $config['source'] ? 'none' : $config['source'].' (configured key)'),
+            $this->translator->text('cli.inspect.configuration_key') => $config['key'] ?? $this->translator->text('cli.inspect.owner_unknown'),
+            $this->translator->text('cli.inspect.override') => null === $config['key'] ? $this->translator->text('cli.inspect.owner_unknown') : (null === $config['source'] ? $this->translator->text('cli.inspect.none_override') : $this->translator->text('cli.inspect.configured_key', ['key' => $config['source']])),
             $this->translator->text('cli.inspect.enabled') => self::boolean($module['enabled']), $this->translator->text('cli.inspect.active') => self::boolean($view['active']),
             $this->translator->text('cli.inspect.state') => $view['state'], $this->translator->text('cli.inspect.global_active') => self::boolean($module['active']),
             $this->translator->text('cli.inspect.activation_reasons') => [] === ($module['activation_reasons'] ?? []) ? $this->translator->text('cli.inspect.none_recorded') : implode(', ', $module['activation_reasons']),

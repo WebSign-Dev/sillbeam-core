@@ -44,7 +44,7 @@ final class ModuleInspectionPresentation
             $collisions = array_filter($catalog, static fn (array $other): bool => 0 === strcasecmp($other['id'], $module['id']));
             $label = $module['id'];
             if (\count($collisions) > 1) {
-                $scope = 'shared' === $module['scope'] ? 'shared' : 'private: '.$this->project($module['project']);
+                $scope = 'shared' === $module['scope'] ? $this->translator->text('cli.graph.label.scope_shared') : $this->translator->text('cli.inspect.private_owner', ['project' => $this->project($module['project'])]);
                 $sameOwner = array_filter($collisions, static fn (array $other): bool => $other['scope'] === $module['scope'] && $other['project'] === $module['project']);
                 if (\count($sameOwner) > 1) {
                     $scope .= '; '.self::suffix($module['class'], array_column($sameOwner, 'class'));
@@ -106,7 +106,7 @@ final class ModuleInspectionPresentation
 
     public function project(?string $class): string
     {
-        return null === $class ? 'unknown' : ($this->projects[$class] ?? 'unknown owner: '.self::suffix($class, array_values(array_unique([...$this->owners, $class]))));
+        return null === $class ? $this->translator->text('cli.inspect.owner_unknown') : ($this->projects[$class] ?? $this->translator->text('cli.inspect.owner_missing', ['class' => self::suffix($class, array_values(array_unique([...$this->owners, $class])))]));
     }
 
     /**
@@ -167,11 +167,11 @@ final class ModuleInspectionPresentation
             $relation .= ('' === $relation ? '' : ' → ').$this->readable($target);
         }
         if ('dependency.cycle' === $finding['rule']) {
-            $relation = 'participants: '.$this->readable((string) ($context['cycle'] ?? 'unknown'));
+            $relation = $this->translator->text('cli.inspect.participants', ['cycle' => $this->readable((string) ($context['cycle'] ?? $this->translator->text('cli.inspect.owner_unknown')))]);
         }
         $class = $context['class'] ?? null;
         if (\is_string($class) && null === $target) {
-            $relation .= ('' === $relation ? '' : '; ').'class '.($this->referenceLabels[$class] ?? basename(str_replace('\\', '/', $class)));
+            $relation .= ('' === $relation ? '' : '; ').$this->translator->text('cli.inspect.reference_class', ['class' => $this->referenceLabels[$class] ?? basename(str_replace('\\', '/', $class))]);
         }
 
         foreach (['host', 'hosts', 'key', 'override', 'id'] as $key) {

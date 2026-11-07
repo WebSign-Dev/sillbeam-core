@@ -67,9 +67,10 @@ final class SnapshotGraph
             foreach ($declared as $target) {
                 $ids = $observations[$class][$target] ?? [];
                 $edge($targets($class), $targets($target), 'declared_dependency', true, [] !== $ids ? true : ($referencesComplete ? false : null), $ids);
+                unset($observations[$class][$target]);
             }
             foreach ($observations[$class] ?? [] as $target => $ids) {
-                $edge($targets($class), $targets($target), 'observed_module_reference', \in_array($target, $declared, true), true, $ids);
+                $edge($targets($class), $targets($target), 'observed_module_reference', false, true, $ids);
             }
         }
         foreach ($projects as $class => $project) {

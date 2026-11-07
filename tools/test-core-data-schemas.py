@@ -161,11 +161,22 @@ def check_document(data):
             assert data["analysis"]["status"] == "valid" and completeness["graph"] == "complete"
         else:
             assert all(row["state"] != "active" for row in nodes.values())
+        dependency_pairs = set()
+        represented_refs = set()
         for edge in unique_index(graph["edges"], "id").values():
             assert edge["source"] in nodes and edge["target"] in nodes
+            if edge["type"] != "project_membership":
+                pair = (edge["source"], edge["target"])
+                assert pair not in dependency_pairs
+                dependency_pairs.add(pair)
+                assert edge["declared"] == (edge["type"] == "declared_dependency")
+                assert (edge["observed"] is True) == bool(edge["reference_ids"])
             for reference_id in edge["reference_ids"]:
+                assert reference_id not in represented_refs
+                represented_refs.add(reference_id)
                 reference = module_refs[reference_id]
                 assert (edge["source"], edge["target"]) == (reference["source_module"], reference["target_module"])
+        assert represented_refs == set(module_refs)
         inventory = data["source_inventory"]
         check_inventory(inventory)
         if completeness["architecture"] == "complete":

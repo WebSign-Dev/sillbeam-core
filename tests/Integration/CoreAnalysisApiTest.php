@@ -143,6 +143,81 @@ final class CoreAnalysisApiTest extends TestCase
         }
     }
 
+    public function testDeclaredAndObservedDependenciesShareOneEdge(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $b = $source->php('src/Module/B/BModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "b")] final class BModule {}');
+            $c = $source->php('src/Module/C/CModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "c")] final class CModule {}');
+            $a = $source->php('src/Module/A/AModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a", dependencies: [\\'.$b.'::class, \\'.$c.'::class])] final class AModule {}');
+            $target = $source->php('src/Module/B/Target.php', 'final class Target {}');
+            foreach (['First', 'Second'] as $class) {
+                $source->php('src/Module/A/'.$class.'.php', 'final class '.$class.' { public \\'.$target.' $target; }');
+            }
+            [$exit, $data] = $this->snapshot($source);
+            self::assertSame(0, $exit);
+            self::assertSame('validated', $data['graph']['validation_state']);
+            $edges = $data['graph']['edges'];
+            self::assertCount(2, $edges);
+            self::assertSame([$a, $a], array_column($edges, 'source'));
+            $byTarget = array_column($edges, null, 'target');
+            self::assertSame('declared_dependency', $byTarget[$b]['type']);
+            self::assertTrue($byTarget[$b]['declared']);
+            self::assertTrue($byTarget[$b]['observed']);
+            self::assertCount(2, $byTarget[$b]['reference_ids']);
+            self::assertSame(array_column($data['references']['module'], 'id'), $byTarget[$b]['reference_ids']);
+            self::assertTrue($byTarget[$c]['declared']);
+            self::assertFalse($byTarget[$c]['observed']);
+            self::assertSame([], $byTarget[$c]['reference_ids']);
+        } finally {
+            $source->remove();
+        }
+    }
+
+    public function testMissingApplicationSourceRootMakesInventoryUnavailable(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            [$presentExit, $present] = $this->snapshot($source);
+            self::assertSame(0, $presentExit);
+            self::assertSame('complete', $present['completeness']['source_inventory']);
+            $source->write('config/packages/sillbeam.yaml', 'sillbeam: { discovery: { namespace: '.$source->namespace.' } }');
+            rmdir($source->directory.'/src');
+            [$exit, $data] = $this->snapshot($source);
+            self::assertSame(3, $exit);
+            self::assertSame('valid', $data['analysis']['status']);
+            self::assertSame('unavailable', $data['completeness']['source_inventory']);
+            self::assertContains('inventory.root_missing', array_column($data['errors'], 'code'));
+            [$inventoryExit, $inventory] = $this->runCommand($source, ['command' => 'sillbeam:inspect:sources', '--format' => 'json']);
+            self::assertSame(2, $inventoryExit);
+            self::assertSame([], $inventory['files']);
+        } finally {
+            $source->remove();
+        }
+    }
+
+    public function testMissingExplicitRootPreservesAvailableInventory(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $source->write('src/Note.txt', 'available');
+            $options = new \Sillbeam\Core\Architecture\DiscoveryOptions(
+                $source->directory.'/src',
+                $source->namespace.'\\',
+                [new \Sillbeam\Core\Architecture\DiscoveryRoot($source->directory.'/missing', $source->namespace.'\\Missing\\')],
+            );
+            $provider = new CoreDataProvider(new \Sillbeam\Core\Api\CoreDataConfiguration($options, $source->directory));
+            $inventory = $provider->inspectSources();
+            self::assertSame('partial', $inventory['status']);
+            self::assertSame([['code' => 'inventory.root_missing', 'path' => null]], $inventory['errors']);
+            $files = $inventory['data']->fields['files'];
+            self::assertIsArray($files);
+            self::assertCount(1, $files);
+        } finally {
+            $source->remove();
+        }
+    }
+
     public function testUnknownDeclaredTargetsHaveNodesAndNoInventedReferences(): void
     {
         $source = new SourceWorkspace();

@@ -3,6 +3,23 @@
 declare(strict_types=1);
 
 return [
+    'cli.graph.label.missing_owner_group' => 'Private Module | zugehöriges Projekt fehlt im verfügbaren Katalog',
+    'cli.graph.label.scope_shared' => 'gemeinsam genutzt',
+    'cli.graph.label.private_owner' => 'privates Projekt: {project}',
+    'cli.graph.label.unknown_owner' => 'unbekanntes zugehöriges Projekt',
+    'cli.graph.label.projects' => '
+Projekte: {projects}',
+    'cli.inspect.private_owner' => 'privat: {project}',
+    'cli.inspect.owner_unknown' => 'unbekannt',
+    'cli.inspect.owner_missing' => 'unbekanntes zugehöriges Projekt: {class}',
+    'cli.inspect.participants' => 'Beteiligte: {cycle}',
+    'cli.inspect.reference_class' => 'Klasse {class}',
+    'cli.graph.label.title' => 'Sillbeam-Modularchitektur',
+    'cli.graph.label.invalid_utf8' => 'ungültige UTF-8-Beschriftung',
+    'cli.graph.label.observed_undeclared' => 'beobachtet, nicht deklariert',
+    'cli.inspect.none_override' => 'keine',
+    'cli.inspect.configured_key' => '{key} (konfigurierter Schlüssel)',
+    'api.inventory.root_missing' => 'Ein erforderliches Quellverzeichnis fehlt.',
     'cli.make.error.name' => 'Der Name muss mit einem ASCII-Buchstaben beginnen und darf nur ASCII-Buchstaben und Ziffern enthalten.',
     'cli.make.error.suffix' => 'Gib den Basisnamen ohne das Suffix {suffix} an.',
     'cli.make.error.root' => 'Konfiguriere zum Erstellen genau ein Suchverzeichnis unter sillbeam.discovery.{type}.',

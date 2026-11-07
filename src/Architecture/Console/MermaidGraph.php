@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Architecture\Console;
 
 use Sillbeam\Core\Architecture\ArchitectureReport;
+use Sillbeam\Core\I18n\CoreTranslator;
 
 /** @internal Deterministic Mermaid presentation of the shared report graph view. */
 final class MermaidGraph
 {
+    public function __construct(private readonly CoreTranslator $translator = new CoreTranslator())
+    {
+    }
+
     /** Returns raw source, with captions/comments rather than disconnected status nodes. */
     public function render(ArchitectureReport|GraphView $report): string
     {
@@ -32,7 +37,7 @@ final class MermaidGraph
             $lines[] = '    end';
         }
         foreach ($view->edges as $edge) {
-            $lines[] = '    '.$view->nodes[$edge['source']]['id'].($edge['observed'] ? ' -.->|observed undeclared| ' : ' --> ').$view->nodes[$edge['target']]['id'];
+            $lines[] = '    '.$view->nodes[$edge['source']]['id'].($edge['observed'] ? (' -.->|'.$this->translator->text('cli.graph.label.observed_undeclared').'| ') : ' --> ').$view->nodes[$edge['target']]['id'];
         }
         $lines[] = '    end';
         foreach (['disabled', 'unknown', 'cycle'] as $style) {
@@ -60,7 +65,7 @@ final class MermaidGraph
 
     private function plain(string $value): string
     {
-        return preg_replace('/[\p{C}\p{Zl}\p{Zp}]/u', ' ', $value) ?? 'invalid UTF-8 label';
+        return preg_replace('/[\p{C}\p{Zl}\p{Zp}]/u', ' ', $value) ?? $this->translator->text('cli.graph.label.invalid_utf8');
     }
 
     /** Encodes all external punctuation before inserting renderer-owned line breaks. */

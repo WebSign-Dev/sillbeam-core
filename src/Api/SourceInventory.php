@@ -28,17 +28,25 @@ final readonly class SourceInventory
         }
         $architectureRoots = [...($options->moduleRoots ?? []), ...($options->projectRoots ?? [])];
         foreach ($options?->roots() ?? [] as $root) {
+            if (!is_dir($root->path)) {
+                if (null !== $options && $options->requiresRoot($root->path) && !$options->excluded($root->path)) {
+                    $errors[] = ['code' => 'inventory.root_missing', 'path' => null];
+                }
+                continue;
+            }
             $path = ($this->relative)($root->path);
             if (null !== $path) {
                 $roots[$path] ??= new CoreDataObject(['id' => 'SR'.(\count($roots) + 1), 'path' => $path, 'namespace' => $root->namespace]);
-            } elseif (is_dir($root->path)) {
+            } else {
                 $errors[] = ['code' => 'export.path_unavailable', 'path' => null];
             }
         }
-        foreach (array_keys($evidence->directories) as $directory) {
+        $hasReadableDirectory = false;
+        foreach ($evidence->directories as $directory => $digest) {
             $path = ($this->relative)($directory);
             if (null !== $path) {
                 $directories[$path] = true;
+                $hasReadableDirectory = $hasReadableDirectory || null !== $digest;
             }
         }
         $moduleDirectories = $projectDirectories = $ownership = [];
@@ -94,7 +102,7 @@ final readonly class SourceInventory
                 'summary' => new CoreDataObject(['directory_count' => \count($directories), 'file_count' => \count($files), 'php_file_count' => $phpCount, 'symbol_count' => $symbolCount]),
                 'directories' => array_map('strval', array_keys($directories)), 'files' => array_values($files), 'excluded_paths' => array_map('strval', array_keys($excluded)),
             ]),
-            'status' => null === $options ? 'unavailable' : ([] === $errors ? 'complete' : 'partial'),
+            'status' => [] === $errors ? 'complete' : ($hasReadableDirectory || [] !== $files ? 'partial' : 'unavailable'),
             'errors' => $errors,
         ];
     }

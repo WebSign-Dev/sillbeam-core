@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture\Console;
 
+use Sillbeam\Core\I18n\CoreTranslator;
+
 /**
  * Standalone SVG presentation using only PHP and the existing graph view.
  *
@@ -15,6 +17,10 @@ namespace Sillbeam\Core\Architecture\Console;
  */
 final class SvgGraph
 {
+    public function __construct(private readonly CoreTranslator $translator = new CoreTranslator())
+    {
+    }
+
     /** Returns deterministic, self-contained SVG without scripts, links or external assets. */
     public function render(GraphView $view): string
     {
@@ -65,12 +71,12 @@ final class SvgGraph
         $width = max(850, $left + 20);
         $svg = ['<?xml version="1.0" encoding="UTF-8"?>',
             '<svg xmlns="http://www.w3.org/2000/svg" width="'.$width.'" height="'.$height.'" viewBox="0 0 '.$width.' '.$height.'" role="img" aria-labelledby="graph-title graph-description">',
-            '<title id="graph-title">Sillbeam module architecture</title>',
+            '<title id="graph-title">'.$this->escape($this->translator->text('cli.graph.label.title')).'</title>',
             '<desc id="graph-description">'.$this->escape(implode("\n", $view->notes)).'</desc>',
             '<defs><marker id="arrow-declared" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/></marker><marker id="arrow-observed" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309"/></marker></defs>',
             '<rect width="100%" height="100%" fill="#fff"/>',
             '<g font-family="monospace" fill="#0f172a">',
-            '<text x="28" y="34" font-family="sans-serif" font-size="21" font-weight="bold">Sillbeam module architecture</text>'];
+            '<text x="28" y="34" font-family="sans-serif" font-size="21" font-weight="bold">'.$this->escape($this->translator->text('cli.graph.label.title')).'</text>'];
         foreach ($caption as $index => $line) {
             $svg[] = $this->text($line, 28, 60 + $index * 19, 12, false, $width - 56);
         }
@@ -135,7 +141,7 @@ final class SvgGraph
         foreach (explode("\n", wordwrap($text, $length, "\n", false)) as $line) {
             $characters = preg_split('//u', $line, -1, \PREG_SPLIT_NO_EMPTY);
             if (false === $characters) {
-                $lines[] = 'invalid UTF-8 label';
+                $lines[] = $this->translator->text('cli.graph.label.invalid_utf8');
                 continue;
             }
             $chunk = '';

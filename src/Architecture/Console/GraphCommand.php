@@ -75,12 +75,12 @@ final class GraphCommand extends Command
             return self::usageError($error, $output, $this->translator);
         }
         if ('mermaid' === $format) {
-            $output->write((new MermaidGraph())->render($view), false, OutputInterface::OUTPUT_RAW);
+            $output->write((new MermaidGraph($this->translator))->render($view), false, OutputInterface::OUTPUT_RAW);
         } else {
             try {
                 $writer = new SvgOutput();
                 $destination = $writer->destination($input->getOption('output') ?? 'architecture.svg', $force);
-                $svg = (new SvgGraph())->render($view);
+                $svg = (new SvgGraph($this->translator))->render($view);
                 $writer->write($destination, $svg, $force);
             } catch (\RuntimeException $error) {
                 self::usageError($error, $output, $this->translator);

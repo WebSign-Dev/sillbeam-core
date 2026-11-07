@@ -45,7 +45,7 @@ final readonly class GraphView
             $projectGroups[$item['class']] = $group;
             $groups[$group] = $translator->text('cli.graph.label.groups', ['id' => $item['id'], 'class' => $projectCounts[strtolower($item['id'])] > 1 ? ' | '.$item['class'] : '', 'state' => null === $item['modules'] ? 'unknown' : 'validated']);
         }
-        $groups['unknown_owner'] = 'Private modules | owner not in available Project catalog';
+        $groups['unknown_owner'] = $translator->text('cli.graph.label.missing_owner_group');
         $cycles = [];
         foreach ($report->data['findings'] as $finding) {
             if ('dependency.cycle' === $finding['rule']) {
@@ -62,7 +62,7 @@ final readonly class GraphView
             $state = null === $active || null === $item['enabled'] ? 'unknown' : (!$item['enabled'] ? 'disabled' : ($active ? 'active' : 'unassigned'));
             $label = $item['id'];
             if ($counts[strtolower($item['id'])] > 1) {
-                $ownerLabel = 'shared' === $item['scope'] ? 'shared' : 'private Project: '.($projectMap[$item['project']]['id'] ?? $item['project'] ?? 'unknown owner');
+                $ownerLabel = 'shared' === $item['scope'] ? $translator->text('cli.graph.label.scope_shared') : $translator->text('cli.graph.label.private_owner', ['project' => $projectMap[$item['project']]['id'] ?? $item['project'] ?? $translator->text('cli.graph.label.unknown_owner')]);
                 $collisions = array_values(array_filter($modules, static fn (array $candidate): bool => 0 === strcasecmp($candidate['id'], $item['id'])
                     && $candidate['scope'] === $item['scope'] && $candidate['project'] === $item['project']));
                 $label .= "\n".$ownerLabel;
@@ -82,7 +82,7 @@ final readonly class GraphView
                     }
                 }
                 if ([] !== $memberships) {
-                    $label .= "\nProjects: ".implode(', ', $memberships);
+                    $label .= $translator->text('cli.graph.label.projects', ['projects' => implode(', ', $memberships)]);
                 }
             }
             $nodes[$class] = ['id' => \sprintf('m%04d', $index + 1), 'label' => $label, 'class' => $class,
