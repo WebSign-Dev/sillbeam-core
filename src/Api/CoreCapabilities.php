@@ -35,7 +35,7 @@ final readonly class CoreCapabilities implements \JsonSerializable
             'default_locale' => CoreTranslator::DEFAULT_LOCALE,
             'available_locales' => CoreTranslator::locales(),
             'profiles' => $profiles,
-            'operations' => ['architecture', 'doctor', 'graph', 'inspect_module'],
+            'operations' => ['architecture', 'doctor', 'graph', 'inspect_module', 'inspect_sources'],
         ];
     }
 }

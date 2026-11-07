@@ -3,6 +3,16 @@
 declare(strict_types=1);
 
 return [
+    'api.doctor_check_failed' => 'A technical error prevented verification.',
+    'api.inventory.format' => 'The source inventory output format must be json.',
+    'api.graph.shared' => 'Shared modules',
+    'api.graph.unresolved' => 'Unresolved targets',
+    'api.doctor_unavailable' => 'Doctor evidence could not be collected.',
+    'api.inventory.read' => 'A source inventory entry could not be read.',
+    'api.inventory.parse' => 'A PHP file could not be parsed for source inventory.',
+    'api.inventory.discovery' => 'Source ownership could not be fully discovered.',
+    'api.export.path_unavailable' => 'A source path is outside the export root or unavailable.',
+    'api.export.input_changed' => 'Snapshot inputs changed during collection.',
     'api.capabilities_format' => 'The capabilities output format must be json.',
     'api.export_failed' => 'The Core Data export failed.',
     'api.invalid_schema_option' => 'The schema version must be an integer.',

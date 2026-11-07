@@ -33,8 +33,6 @@ final class CoreDataFoundationTest extends TestCase
         $contents = file_get_contents(__DIR__.'/../../docs/reference/core-data/examples/capabilities.json');
         self::assertIsString($contents);
         $expected = json_decode($contents, true, flags: \JSON_THROW_ON_ERROR);
-        unset($expected['profiles']['analysis']);
-        $expected['operations'] = array_values(array_diff($expected['operations'], ['inspect_sources']));
         self::assertSame($expected, (new CoreCapabilitiesProvider())->capabilities()->jsonSerialize());
     }
 

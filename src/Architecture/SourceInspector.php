@@ -23,7 +23,7 @@ final class SourceInspector
     /** @var array<string, list<string>> */
     private array $prunedPaths = [];
 
-    public function __construct(private readonly bool $limitParseFailuresToDiscoveryRoots = false)
+    public function __construct(private readonly bool $limitParseFailuresToDiscoveryRoots = false, private readonly ?SourceInventoryEvidence $inventory = null, private readonly bool $inventoryOnly = false)
     {
     }
 
@@ -64,10 +64,25 @@ final class SourceInspector
                     break;
                 }
             }
+            if (null !== $this->inventory && \array_key_exists($root->path, $this->inventory->directories)) {
+                continue;
+            }
+            $this->inventory?->directory($root->path);
+            if (null !== $this->inventory && null === $this->inventory->directories[$root->path]) {
+                continue;
+            }
+            $inventory = $this->inventory;
             $iterator = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(
                 new \RecursiveDirectoryIterator($root->path, \FilesystemIterator::SKIP_DOTS),
-                static function (\SplFileInfo $file) use ($options, &$pruned): bool {
-                    if (!$options->excluded(FilesystemPath::normalize($file->getPathname()))) {
+                static function (\SplFileInfo $file) use ($options, &$pruned, $inventory): bool {
+                    $path = FilesystemPath::normalize($file->getPathname());
+                    if (!$options->excluded($path)) {
+                        if (null !== $inventory && $file->isDir() && !$file->isLink()) {
+                            $inventory->directory($path);
+
+                            return null !== $inventory->directories[$path];
+                        }
+
                         return true;
                     }
                     $pruned[FilesystemPath::normalize($file->getPathname())] = FilesystemPath::normalize($file->getPathname()).($file->isDir() ? '/' : '');
@@ -76,7 +91,11 @@ final class SourceInspector
                 },
             ));
             foreach ($iterator as $entry) {
-                if (!$entry->isFile() || 'php' !== $entry->getExtension() || isset($paths[FilesystemPath::normalize($entry->getPathname())])) {
+                $path = FilesystemPath::normalize($entry->getPathname());
+                if ($entry->isFile()) {
+                    $this->inventory?->file($path);
+                }
+                if (!$entry->isFile() || ('php' !== $entry->getExtension() && (null === $this->inventory || 'php' !== strtolower($entry->getExtension()))) || isset($paths[$path])) {
                     continue;
                 }
                 $paths[FilesystemPath::normalize($entry->getPathname())] = true;
@@ -86,11 +105,29 @@ final class SourceInspector
         ksort($paths);
         $failures = new ArchitectureFindings();
         $cause = null;
+        foreach ($this->inventory->directories ?? [] as $directory => $digest) {
+            if (null === $digest && !$this->inventoryOnly && $this->requiresSource($options, $directory)) {
+                $failures->add(ArchitectureFinding::fromMessage('source.read', new CoreMessage('finding.source.read', ['path' => $directory]), ['file' => $directory], 'fatal'));
+            }
+        }
         foreach (array_keys($paths) as $path) {
+            $contents = null;
+            $parsed = null;
             try {
-                $files[$path] = $parser->parse($path);
+                if (null !== $this->inventory) {
+                    $bytes = @file_get_contents($path);
+                    if (false === $bytes) {
+                        throw ArchitectureValidationException::fatalMessage('source.read', new CoreMessage('finding.source.read', ['path' => $path]), ['file' => $path]);
+                    }
+                    $contents = $bytes;
+                }
+                $extraExtension = 'php' !== pathinfo($path, \PATHINFO_EXTENSION);
+                $parsed = $parser->parse($path, $contents, $extraExtension);
+                if (!$extraExtension) {
+                    $files[$path] = $parsed;
+                }
             } catch (\PhpParser\Error $error) {
-                if (!$this->requiresSource($options, $path)) {
+                if ($this->inventoryOnly || !$this->requiresSource($options, $path) || 'php' !== pathinfo($path, \PATHINFO_EXTENSION)) {
                     continue;
                 }
                 $failures->add(ArchitectureFinding::fromMessage('source.parse', new CoreMessage('finding.source.parse', ['path' => $path, 'error' => CoreError::message($error)]), ['file' => $path, 'line' => $error->getStartLine()], 'fatal'));
@@ -98,7 +135,7 @@ final class SourceInspector
             } catch (ArchitectureValidationException $error) {
                 $retained = false;
                 foreach ($error->result->findings as $finding) {
-                    if ('source.read' === $finding->rule && !$this->requiresSource($options, $path)) {
+                    if ($this->inventoryOnly || 'php' !== pathinfo($path, \PATHINFO_EXTENSION) || ('source.read' === $finding->rule && !$this->requiresSource($options, $path))) {
                         continue;
                     }
                     $failures->add($finding);
@@ -107,7 +144,12 @@ final class SourceInspector
                 if ($retained) {
                     $cause ??= $error->getPrevious();
                 }
+            } finally {
+                $this->inventory?->php($path, $contents, $parsed);
             }
+        }
+        if (null !== $this->inventory) {
+            $this->inventory->excluded = array_keys($pruned);
         }
         (new ArchitectureAnalysisResult($failures->all(), cause: $cause))->throwIfInvalid();
         $this->prunedPaths[$key] = array_values($pruned);

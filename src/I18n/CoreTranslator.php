@@ -21,6 +21,41 @@ final class CoreTranslator
     /** @var array<string, array{resource_key: string, locale: string, source_locale: string}> */
     private array $fallbacks = [];
 
+    private ?string $capturePrefix = null;
+    /** @var array<string, array{string, array<string, string|int>}> */
+    private array $captured = [];
+    /** @var array<string, string> */
+    private array $tokens = [];
+
+    /** @internal Capture messages during evidence collection for later rendering. */
+    public static function capture(): self
+    {
+        $translator = new self();
+        $translator->capturePrefix = '~sb'.bin2hex(random_bytes(12)).'_';
+
+        return $translator;
+    }
+
+    /** @internal */
+    public function isCaptured(string $text): bool
+    {
+        return isset($this->captured[$text]);
+    }
+
+    /** @internal Render captured resources, including nested resource parameters. */
+    public function resolve(string $text, self $target): string
+    {
+        if (null === $this->capturePrefix) {
+            return $text;
+        }
+
+        return preg_replace_callback('/'.$this->capturePrefix.'[0-9]+~/', function (array $match) use ($target): string {
+            [$key, $parameters] = $this->captured[$match[0]];
+
+            return $target->text($key, array_map(fn (string|int $value): string|int => \is_string($value) ? $this->resolve($value, $target) : $value, $parameters));
+        }, $text) ?? $text;
+    }
+
     public function __construct(public readonly string $locale = self::DEFAULT_LOCALE)
     {
     }
@@ -34,6 +69,16 @@ final class CoreTranslator
     /** @param array<string, string|int> $parameters */
     public function text(string $key, array $parameters = []): string
     {
+        if (null !== $this->capturePrefix) {
+            $identity = serialize([$key, $parameters]);
+            if (!isset($this->tokens[$identity])) {
+                $token = $this->capturePrefix.\count($this->captured).'~';
+                $this->captured[$token] = [$key, $parameters];
+                $this->tokens[$identity] = $token;
+            }
+
+            return $this->tokens[$identity];
+        }
         $template = self::catalog($this->locale)[$key] ?? null;
         if (null === $template) {
             $template = self::catalog(self::DEFAULT_LOCALE)[$key] ?? throw new \LogicException('Unknown Core resource key: '.$key);

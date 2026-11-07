@@ -26,20 +26,23 @@ final class SourceFileParser
      * @throws ArchitectureValidationException if the file is unreadable or descriptor attributes are ambiguous
      * @throws \PhpParser\Error                if the file contains invalid PHP syntax
      */
-    public function parse(string $path): SourceFile
+    public function parse(string $path, ?string $contents = null, bool $inventoryOnly = false): SourceFile
     {
-        $contents = @file_get_contents($path);
+        $collectSymbols = null !== $contents || $inventoryOnly;
+        $contents ??= @file_get_contents($path);
         if (false === $contents) {
             throw ArchitectureValidationException::fatalMessage('source.read', new CoreMessage('finding.source.read', ['path' => $path]), ['file' => $path]);
         }
         $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse($contents) ?? [];
-        $collector = new class($path) extends NodeVisitorAbstract {
-            public function __construct(private readonly string $path)
+        $collector = new class($path, $inventoryOnly, $collectSymbols) extends NodeVisitorAbstract {
+            public function __construct(private readonly string $path, private readonly bool $inventoryOnly, private readonly bool $collectSymbols)
             {
             }
 
             /** @var list<class-string> */
             public array $classes = [];
+            /** @var list<array{name: string, type: string}> */
+            public array $symbols = [];
             /** @var array<class-string, string> */
             public array $descriptors = [];
             /** @var list<array{class: string, line: int, kind?: 'attribute'}> */
@@ -54,16 +57,29 @@ final class SourceFileParser
                     /** @var class-string $class */
                     $class = (string) $node->namespacedName;
                     $this->classes[] = $class;
-                    foreach ($node->attrGroups as $group) {
-                        foreach ($group->attrs as $attribute) {
-                            if (null !== ($descriptor = $this->descriptorType($attribute->name))) {
-                                if (isset($this->descriptors[$class])) {
-                                    throw ArchitectureValidationException::fatalMessage('discovery.multiple_attributes', new CoreMessage('finding.discovery.multiple_attributes', ['class' => $class]), ['file' => $this->path, 'line' => $node->getStartLine(), 'class' => $class]);
+                    if ($this->collectSymbols) {
+                        $this->symbols[] = ['name' => $class, 'type' => match (true) {
+                            $node instanceof Node\Stmt\Interface_ => 'interface',
+                            $node instanceof Node\Stmt\Trait_ => 'trait',
+                            $node instanceof Node\Stmt\Enum_ => 'enum',
+                            default => 'class',
+                        }];
+                    }
+                    if (!$this->inventoryOnly) {
+                        foreach ($node->attrGroups as $group) {
+                            foreach ($group->attrs as $attribute) {
+                                if (null !== ($descriptor = $this->descriptorType($attribute->name))) {
+                                    if (isset($this->descriptors[$class])) {
+                                        throw ArchitectureValidationException::fatalMessage('discovery.multiple_attributes', new CoreMessage('finding.discovery.multiple_attributes', ['class' => $class]), ['file' => $this->path, 'line' => $node->getStartLine(), 'class' => $class]);
+                                    }
+                                    $this->descriptors[$class] = $descriptor;
                                 }
-                                $this->descriptors[$class] = $descriptor;
                             }
                         }
                     }
+                }
+                if ($this->inventoryOnly) {
+                    return null;
                 }
                 if ($node instanceof Node\Stmt\ClassLike) {
                     foreach ((array) ($node->implements ?? []) as $type) {
@@ -139,6 +155,6 @@ final class SourceFileParser
         };
         (new NodeTraverser(new NameResolver(), $collector))->traverse($nodes);
 
-        return new SourceFile($path, $collector->classes, $collector->descriptors, $collector->references);
+        return new SourceFile($path, $collector->classes, $collector->descriptors, $collector->references, $collector->symbols);
     }
 }

@@ -151,7 +151,7 @@ final class CoreLiveApiTest extends TestCase
         self::assertSame([], $unavailable['diagnostics']['findings']);
         self::assertSame('export.analysis_unavailable', $unavailable['errors'][0]['code']);
 
-        [$code, $json, $stderr] = $this->runCommand('sillbeam:api', ['--profile' => 'analysis']);
+        [$code, $json, $stderr] = $this->runCommand('sillbeam:api', ['--profile' => 'analysis', '--locale' => 'de']);
         self::assertSame(4, $code);
         self::assertSame('', $json);
         self::assertNotSame('', $stderr);
@@ -186,8 +186,8 @@ final class CoreLiveApiTest extends TestCase
         [$code, $json, $stderr] = $this->runCommand('sillbeam:api:capabilities', ['--format' => 'json']);
         self::assertSame(0, $code, $stderr);
         $data = json_decode($json, true, flags: \JSON_THROW_ON_ERROR);
-        self::assertSame(['live'], array_keys($data['profiles']));
-        self::assertNotContains('inspect_sources', $data['operations']);
+        self::assertSame(['live', 'analysis'], array_keys($data['profiles']));
+        self::assertContains('inspect_sources', $data['operations']);
     }
 
     /** @return class-string */

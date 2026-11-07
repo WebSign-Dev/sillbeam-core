@@ -16,7 +16,9 @@ deptrac:
         - name: Presentation
           collectors: [{ type: directory, value: 'src/Console/Style/.*' }]
         - name: Console
-          collectors: [{ type: directory, value: 'src/Console/(?!Style/).*' }]
+          collectors: [{ type: directory, value: 'src/Console/(?!Style/|Doctor/).*' }]
+        - name: Doctor
+          collectors: [{ type: directory, value: 'src/Console/Doctor/.*' }]
         - name: I18n
           collectors: [{ type: directory, value: 'src/I18n/.*' }]
         - name: Api
@@ -29,8 +31,9 @@ deptrac:
         Project: [Architecture, Module, I18n]
         Kernel: [Module, Presentation]
         Routing: [Module, Project]
-        DependencyInjection: [Architecture, Module, Project, Kernel, Routing, Console]
-        Console: [Api, Architecture, DependencyInjection, Presentation, I18n]
+        DependencyInjection: [Architecture, Module, Project, Kernel, Routing, Console, Doctor]
+        Console: [Api, Architecture, DependencyInjection, Doctor, Presentation, I18n]
+        Doctor: [Architecture, DependencyInjection, Presentation, I18n]
         Bundle: [DependencyInjection]
         I18n: []
-        Api: [Architecture, Module, I18n]
+        Api: [Architecture, Module, Project, Doctor, I18n]

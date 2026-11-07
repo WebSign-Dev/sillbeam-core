@@ -30,7 +30,17 @@ final class CoreDataCommand extends Command
 
     public static function forKernel(KernelInterface $kernel): self
     {
-        return new self(new CoreDataProvider(static fn () => (new KernelArchitectureReporter())->configuration($kernel)));
+        return new self(self::providerForKernel($kernel));
+    }
+
+    public static function providerForKernel(KernelInterface $kernel): CoreDataProvider
+    {
+        return new CoreDataProvider(
+            static fn () => (new KernelArchitectureReporter())->configuration($kernel),
+            static fn (): string => $kernel->getProjectDir(),
+            $kernel->getEnvironment(),
+            (new \ReflectionClass($kernel))->getFileName() ?: null,
+        );
     }
 
     protected function configure(): void

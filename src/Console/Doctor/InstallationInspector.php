@@ -25,8 +25,15 @@ use Symfony\Component\Yaml\Yaml;
 final class InstallationInspector
 {
     /** @return list<array{id: string, label: string, status: string, detail: string}> */
-    public function inspect(string $directory, string $environment, ?string $kernelFile = null, CoreTranslator $translator = new CoreTranslator()): array
+    public function inspect(string $directory, string $environment, ?string $kernelFile = null, CoreTranslator $translator = new CoreTranslator(), bool $safeErrors = false): array
     {
+        $renderError = static function (\Throwable $error) use ($translator, $safeErrors): string {
+            if (!$safeErrors || $translator->isCaptured($error->getMessage()) || CoreError::message($error) instanceof \Sillbeam\Core\I18n\CoreMessage) {
+                return CoreError::render($error, $translator);
+            }
+
+            return $translator->text('api.doctor_check_failed');
+        };
         $checks = [];
         $add = static function (string $id, string $label, string $status, string $detail = '') use (&$checks): void {
             $checks[] = compact('id', 'label', 'status', 'detail');
@@ -67,7 +74,7 @@ final class InstallationInspector
                     }
                 }
             } catch (\Throwable $error) {
-                $add($id, $label, 'not verified', $translator->text('doctor.configuration.review_file', ['error' => CoreError::render($error, $translator)]));
+                $add($id, $label, 'not verified', $translator->text('doctor.configuration.review_file', ['error' => $renderError($error)]));
             }
         }
         $kernelKnown = false;
@@ -79,7 +86,7 @@ final class InstallationInspector
             $kernelKnown = true;
             $add('configuration.loading', $translator->text('doctor.check.configuration.loading'), 'verified');
         } catch (\Throwable $error) {
-            $add('configuration.loading', $translator->text('doctor.check.configuration.loading'), 'not verified', $translator->text('doctor.configuration.review_kernel', ['error' => CoreError::render($error, $translator)]));
+            $add('configuration.loading', $translator->text('doctor.check.configuration.loading'), 'not verified', $translator->text('doctor.configuration.review_kernel', ['error' => $renderError($error)]));
         }
         $documents = [];
         $unknown = ['route' => !$kernelKnown, 'discovery' => !$kernelKnown, 'service' => !$kernelKnown];
@@ -140,12 +147,12 @@ final class InstallationInspector
                     $documents[$path] = $data;
                 } catch (\Throwable $error) {
                     $this->markUnknown($unknown, $routing);
-                    $add('configuration.files', $translator->text('doctor.check.configuration.files'), 'not verified', $translator->text('doctor.configuration.review_named', ['file' => $relative, 'error' => CoreError::render($error, $translator)]));
+                    $add('configuration.files', $translator->text('doctor.check.configuration.files'), 'not verified', $translator->text('doctor.configuration.review_named', ['file' => $relative, 'error' => $renderError($error)]));
                 }
             }
         } catch (\Throwable $error) {
             $unknown = ['route' => true, 'discovery' => true, 'service' => true];
-            $add('configuration.files', $translator->text('doctor.check.configuration.files'), 'not verified', $translator->text('doctor.configuration.review', ['error' => CoreError::render($error, $translator)]));
+            $add('configuration.files', $translator->text('doctor.check.configuration.files'), 'not verified', $translator->text('doctor.configuration.review', ['error' => $renderError($error)]));
         }
         $routeImports = [];
         $routeUnknown = $unknown['route'];
@@ -204,7 +211,7 @@ final class InstallationInspector
             $options = (new DiscoveryOptionsResolver())->resolve($container, $configs, $config);
             $add('discovery.configuration', $translator->text('doctor.check.discovery.configuration'), 'verified');
         } catch (\Throwable $error) {
-            $add('discovery.configuration', $translator->text('doctor.check.discovery.configuration'), 'not verified', $translator->text('doctor.discovery.review', ['error' => CoreError::render($error, $translator)]));
+            $add('discovery.configuration', $translator->text('doctor.check.discovery.configuration'), 'not verified', $translator->text('doctor.discovery.review', ['error' => $renderError($error)]));
         }
         $serviceUnknown = $unknown['service'] || null === $options;
         $overlaps = [];

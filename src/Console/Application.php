@@ -11,6 +11,7 @@ use Sillbeam\Core\Architecture\Console\InspectModuleCommand;
 use Sillbeam\Core\Architecture\Console\ReportCommand;
 use Sillbeam\Core\Console\Api\CoreCapabilitiesCommand;
 use Sillbeam\Core\Console\Api\CoreDataCommand;
+use Sillbeam\Core\Console\Api\InspectSourcesCommand;
 use Sillbeam\Core\Console\Doctor\DoctorCommand;
 use Symfony\Bundle\FrameworkBundle\Console\Application as SymfonyApplication;
 use Symfony\Component\Console\Application as ConsoleApplication;
@@ -56,7 +57,7 @@ final class Application extends SymfonyApplication
             // The actual command validates usage and returns a structured error below.
         }
         $name = $input->getFirstArgument();
-        if (!\in_array($name, ['sillbeam:architecture', 'sillbeam:report', 'sillbeam:doctor', 'sillbeam:inspect:module', 'sillbeam:graph', 'sillbeam:api', 'sillbeam:api:capabilities'], true)) {
+        if (!\in_array($name, ['sillbeam:architecture', 'sillbeam:report', 'sillbeam:doctor', 'sillbeam:inspect:module', 'sillbeam:graph', 'sillbeam:api', 'sillbeam:api:capabilities', 'sillbeam:inspect:sources'], true)) {
             // A value before the command may belong to the API's --profile rather than Symfony's profiler flag.
             $api = CoreDataCommand::forKernel($this->getKernel());
             $definition->setOptions(array_replace($definition->getOptions(), $api->getDefinition()->getOptions()));
@@ -66,7 +67,7 @@ final class Application extends SymfonyApplication
                 // The command handles validation below.
             }
             $name = $input->getFirstArgument();
-            if (!\in_array($name, ['sillbeam:api', 'sillbeam:api:capabilities'], true)) {
+            if (!\in_array($name, ['sillbeam:api', 'sillbeam:api:capabilities', 'sillbeam:inspect:sources'], true)) {
                 return parent::doRun($input, $output);
             }
         }
@@ -79,6 +80,7 @@ final class Application extends SymfonyApplication
             $command = match ($name) {
                 'sillbeam:api' => $api ?? CoreDataCommand::forKernel($this->getKernel()),
                 'sillbeam:api:capabilities' => new CoreCapabilitiesCommand(),
+                'sillbeam:inspect:sources' => new InspectSourcesCommand(CoreDataCommand::providerForKernel($this->getKernel())),
                 'sillbeam:doctor' => $this->doctorCommand(),
                 'sillbeam:inspect:module' => $this->inspectModuleCommand(),
                 'sillbeam:graph' => $this->graphCommand(),
@@ -99,7 +101,7 @@ final class Application extends SymfonyApplication
 
             return $application->doRun($input, $output);
         } catch (\Throwable $error) {
-            if ('sillbeam:api' === $name || 'sillbeam:api:capabilities' === $name) {
+            if ('sillbeam:api' === $name || 'sillbeam:api:capabilities' === $name || 'sillbeam:inspect:sources' === $name) {
                 return CoreDataCommand::failure($error, $output);
             }
             if ('sillbeam:graph' === $name) {
@@ -129,6 +131,7 @@ final class Application extends SymfonyApplication
         return match ($name) {
             'sillbeam:api' => CoreDataCommand::forKernel($this->getKernel()),
             'sillbeam:api:capabilities' => new CoreCapabilitiesCommand(),
+            'sillbeam:inspect:sources' => new InspectSourcesCommand(CoreDataCommand::providerForKernel($this->getKernel())),
             'sillbeam:architecture' => $this->architectureCommand(),
             'sillbeam:report' => $this->reportCommand(),
             'sillbeam:doctor' => $this->doctorCommand(),
@@ -148,6 +151,7 @@ final class Application extends SymfonyApplication
         return match ($name) {
             'sillbeam:api' => CoreDataCommand::forKernel($this->getKernel()),
             'sillbeam:api:capabilities' => new CoreCapabilitiesCommand(),
+            'sillbeam:inspect:sources' => new InspectSourcesCommand(CoreDataCommand::providerForKernel($this->getKernel())),
             'sillbeam:architecture' => $this->architectureCommand(),
             'sillbeam:report' => $this->reportCommand(),
             'sillbeam:doctor' => $this->doctorCommand(),

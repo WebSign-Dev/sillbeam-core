@@ -14,8 +14,10 @@ use Sillbeam\Core\I18n\CoreTranslator;
 /** @internal Projects existing diagnostic groups and their original evidence. */
 final readonly class LiveDiagnostics
 {
-    /** @param \Closure(string): ?string $relativePath */
-    public function __construct(private CoreTranslator $translator, private \Closure $relativePath)
+    /** @param \Closure(string): ?string $relativePath
+     * @param array<string, CoreTranslator> $locales
+     */
+    public function __construct(private CoreTranslator $translator, private \Closure $relativePath, private array $locales = [])
     {
     }
 
@@ -148,6 +150,22 @@ final readonly class LiveDiagnostics
     /** @param array<string, mixed> $fields */
     private function translated(array $fields): CoreDataObject
     {
-        return new CoreDataObject([$this->translator->locale => new CoreDataObject($fields)]);
+        if ([] === $this->locales) {
+            return new CoreDataObject([$this->translator->locale => new CoreDataObject($fields)]);
+        }
+        $translations = [];
+        foreach ($this->locales as $locale => $target) {
+            $render = fn (string $text): string => $this->translator->resolve($text, $target);
+            $translations[$locale] = new CoreDataObject(array_map(
+                static fn (string|array|null $value): string|array|null => match (true) {
+                    \is_array($value) => array_map($render, $value),
+                    \is_string($value) => $render($value),
+                    default => null,
+                },
+                $fields,
+            ));
+        }
+
+        return new CoreDataObject($translations);
     }
 }

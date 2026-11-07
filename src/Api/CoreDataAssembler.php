@@ -7,38 +7,49 @@ namespace Sillbeam\Core\Api;
 use Sillbeam\Core\Architecture\ArchitectureAnalysisResult;
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\Console\ModuleInspection;
-use Sillbeam\Core\Architecture\FilesystemPath;
+use Sillbeam\Core\Architecture\SourceInventoryEvidence;
 use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\HttpKernel\Kernel;
 
 /** @internal Mutable projection state for one snapshot. */
-final class LiveDataAssembler
+final class CoreDataAssembler
 {
     private readonly CoreTranslator $translator;
-    private readonly ?string $root;
-
-    /** @var array<string, string|null> */
-    private array $paths = [];
+    private readonly SnapshotPaths $paths;
+    /** @var array<string, CoreTranslator> */
+    private readonly array $locales;
 
     /** @var array<string, true> */
     private array $omissions = [];
 
-    public function __construct(private readonly CoreDataRequest $request, ?string $projectDir)
+    public function __construct(private readonly CoreDataRequest $request, private readonly ?string $projectDir)
     {
         $this->translator = new CoreTranslator($request->locale ?? CoreTranslator::DEFAULT_LOCALE);
-        $root = null === $projectDir ? false : realpath($projectDir);
-        $this->root = false === $root ? null : FilesystemPath::directoryPrefix($root);
+        $locales = CoreDataProfile::Analysis === $request->profile ? CoreTranslator::locales() : [$this->translator->locale];
+        $this->locales = array_combine($locales, array_map(static fn (string $locale): CoreTranslator => new CoreTranslator($locale), $locales));
+        $this->paths = new SnapshotPaths($projectDir);
     }
 
-    /** @param array<string, mixed> $config */
-    public function assemble(ArchitectureAnalysisResult $result, array $config, int $duration, string $analyzedAt, ?string $failure): CoreDataDocument
-    {
+    public function assemble(
+        ArchitectureAnalysisResult $result,
+        ?CoreDataConfiguration $input,
+        int $duration,
+        string $analyzedAt,
+        ?string $failure,
+        ?SourceInventoryEvidence $evidence,
+        ?SnapshotInputs $inputs,
+        string $environment,
+        ?string $kernelFile,
+    ): CoreDataDocument {
+        $config = $input->config ?? [];
         $catalog = ArchitectureReport::catalog($result, $config);
         $inspection = ModuleInspection::metadata($result, $config);
         $projects = $this->projects($catalog['projects']);
         $modules = $this->modules($result, $catalog['modules'], $projects, $inspection['configuration']);
         $references = $this->references($result, $modules);
-        $diagnostics = (new LiveDiagnostics($this->translator, $this->relative(...)))->project($result);
+        $diagnostics = null === $evidence
+            ? (new LiveDiagnostics($this->locales[$this->translator->locale], $this->relative(...)))->project($result)
+            : (new LiveDiagnostics(CoreTranslator::capture(), $this->relative(...), $this->locales))->project($result);
         $complete = null === $failure && $result->isComplete();
         $available = $complete || null !== $result->discovery;
         $status = !$complete ? 'unavailable' : ($result->isValid() ? 'valid' : 'violations');
@@ -52,7 +63,7 @@ final class LiveDataAssembler
             $errors[] = new CoreDataObject([
                 'code' => 'export.analysis_unavailable', 'domain' => 'architecture', 'severity' => 'fatal',
                 'path' => null, 'context' => new CoreDataObject(['exception' => $failure]),
-                'translations' => $this->translated(['message' => $this->translator->text('api.analysis_unavailable')]),
+                'translations' => $this->message('api.analysis_unavailable'),
             ]);
         }
         foreach (array_keys($this->omissions) as $domain) {
@@ -60,11 +71,45 @@ final class LiveDataAssembler
             $errors[] = new CoreDataObject([
                 'code' => 'export.path_unavailable', 'domain' => $domain, 'severity' => 'error',
                 'path' => null, 'context' => new CoreDataObject(),
-                'translations' => $this->translated(['message' => $this->translator->text('api.path_unavailable')]),
+                'translations' => $this->message('api.path_unavailable'),
             ]);
         }
+        $graph = $inventory = $doctor = $fingerprint = null;
+        if (null !== $evidence) {
+            [$doctor, $completeness['doctor']] = SnapshotDoctor::collect($this->projectDir, $environment, $kernelFile, $this->locales);
+            if ('complete' !== $completeness['doctor']) {
+                $errors[] = $this->error('doctor.execution', 'doctor', null, 'api.doctor_unavailable');
+            }
+
+            $changed = $evidence->changed();
+            $configurationChanged = $inputs?->changed() ?? false;
+            if (null !== $input && null === $result->discovery && [] !== $evidence->files) {
+                $evidence->failures[$input->options->root] = 'inventory.discovery';
+            }
+            $inventoryData = (new SourceInventory($this->relative(...)))->project($input?->options, $result->discovery, $evidence);
+            $inventory = $inventoryData['data'];
+            $completeness['source_inventory'] = $inventoryData['status'];
+            foreach ($inventoryData['errors'] as $error) {
+                $errors[] = $this->error($error['code'], 'source_inventory', $error['path'], 'api.'.$error['code']);
+            }
+            if ([] !== $changed || $configurationChanged) {
+                foreach ($completeness as $domain => $state) {
+                    if ('complete' === $state && ('doctor' !== $domain || $configurationChanged)) {
+                        $completeness[$domain] = 'partial';
+                    }
+                }
+                $errors[] = $this->error('export.input_changed', 'export', null, 'api.export.input_changed');
+            }
+            $graphComplete = 'complete' === $completeness['architecture'] && 'complete' === $completeness['references'];
+            $graphState = null !== $result->architecture && $complete && $graphComplete ? 'validated'
+                : ([] !== $modules || [] !== $projects || $complete ? 'evidence_only' : 'unavailable');
+            $completeness['graph'] = $graphComplete ? 'complete' : ('unavailable' === $graphState ? 'unavailable' : 'partial');
+            $graph = SnapshotGraph::project($modules, $projects, $references['module'], $graphState, 'complete' === $completeness['references'], $this->locales);
+            if ($complete && $graphComplete && [] === $changed && !$configurationChanged) {
+                $fingerprint = ArchitectureFingerprint::hash($status, $modules, $projects, $references);
+            }
+        }
         $export = !$complete ? 'unavailable' : (array_all($completeness, static fn (string $domain): bool => 'complete' === $domain) ? 'complete' : 'partial');
-        $locale = $this->translator->locale;
 
         return new CoreDataDocument(
             $this->request,
@@ -75,15 +120,15 @@ final class LiveDataAssembler
                 'duration_ms' => $duration,
                 'php_version' => \PHP_VERSION,
                 'symfony_version' => Kernel::VERSION,
-                'architecture_fingerprint' => null,
-                'fingerprint_version' => null,
+                'architecture_fingerprint' => $fingerprint,
+                'fingerprint_version' => null === $fingerprint ? null : ArchitectureFingerprint::VERSION,
             ]),
             new CoreDataObject([
                 'default_locale' => CoreTranslator::DEFAULT_LOCALE,
                 'available_locales' => CoreTranslator::locales(),
-                'included_locales' => [$locale],
-                'requested_locale' => $locale,
-                'fallbacks' => array_map(static fn (array $fallback): CoreDataObject => new CoreDataObject($fallback), $this->translator->fallbacks()),
+                'included_locales' => array_keys($this->locales),
+                'requested_locale' => $this->request->locale,
+                'fallbacks' => array_map(static fn (array $fallback): CoreDataObject => new CoreDataObject($fallback), array_merge(...array_values(array_map(static fn (CoreTranslator $translator): array => $translator->fallbacks(), $this->locales)))),
             ]),
             new CoreDataObject(['status' => $status, 'valid' => 'valid' === $status, 'complete' => $complete]),
             new CoreDataObject(['status' => $export]),
@@ -98,6 +143,9 @@ final class LiveDataAssembler
             new CoreDataObject($references),
             $errors,
             new CoreDataObject(),
+            $graph,
+            $inventory,
+            $doctor,
         );
     }
 
@@ -234,18 +282,7 @@ final class LiveDataAssembler
 
     private function relative(string $path, ?string $domain = null): ?string
     {
-        if (!\array_key_exists($path, $this->paths)) {
-            $absolute = str_contains($path, "\0") ? false : realpath($path);
-            $absolute = false === $absolute ? '' : FilesystemPath::normalize($absolute);
-            $relative = match (true) {
-                null === $this->root || '' === $absolute => '',
-                FilesystemPath::directoryPrefix($absolute) === $this->root => '.',
-                str_starts_with($absolute, $this->root) => substr($absolute, \strlen($this->root)),
-                default => '',
-            };
-            $this->paths[$path] = '' === $relative || preg_match('~^(?:[A-Za-z]:)|(?:^|/)\.\.(?:/|$)~', $relative) ? null : $relative;
-        }
-        $relative = $this->paths[$path];
+        $relative = $this->paths->relative($path);
         if (null === $relative && null !== $domain) {
             $this->omissions[$domain] = true;
         }
@@ -261,10 +298,17 @@ final class LiveDataAssembler
         return array_values(array_unique($values));
     }
 
-    /** @param array<string, mixed> $fields */
-    private function translated(array $fields): CoreDataObject
+    private function message(string $key): CoreDataObject
     {
-        return new CoreDataObject([$this->translator->locale => new CoreDataObject($fields)]);
+        return new CoreDataObject(array_map(static fn (CoreTranslator $translator): CoreDataObject => new CoreDataObject(['message' => $translator->text($key)]), $this->locales));
+    }
+
+    private function error(string $code, string $domain, ?string $path, string $key): CoreDataObject
+    {
+        return new CoreDataObject([
+            'code' => $code, 'domain' => $domain, 'severity' => 'error', 'path' => $path,
+            'context' => new CoreDataObject(), 'translations' => $this->message($key),
+        ]);
     }
 
     private static function runId(): string

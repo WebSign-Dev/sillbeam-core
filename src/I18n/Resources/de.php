@@ -3,6 +3,16 @@
 declare(strict_types=1);
 
 return [
+    'api.doctor_check_failed' => 'Ein technischer Fehler hat die Prüfung verhindert.',
+    'api.inventory.format' => 'Das Ausgabeformat für das Quellinventar muss json sein.',
+    'api.graph.shared' => 'Gemeinsame Module',
+    'api.graph.unresolved' => 'Nicht aufgelöste Ziele',
+    'api.doctor_unavailable' => 'Doctor-Belege konnten nicht erhoben werden.',
+    'api.inventory.read' => 'Ein Eintrag im Quellinventar konnte nicht gelesen werden.',
+    'api.inventory.parse' => 'Eine PHP-Datei konnte für das Quellinventar nicht geparst werden.',
+    'api.inventory.discovery' => 'Die Zuordnung der Quelldateien konnte nicht vollständig ermittelt werden.',
+    'api.export.path_unavailable' => 'Ein Quellpfad liegt außerhalb des Exportverzeichnisses oder ist nicht verfügbar.',
+    'api.export.input_changed' => 'Die Eingabedaten des Snapshots haben sich während der Erfassung geändert.',
     'api.capabilities_format' => 'Das Ausgabeformat für Capabilities muss json sein.',
     'api.export_failed' => 'Der Core-Datenexport ist fehlgeschlagen.',
     'api.invalid_schema_option' => 'Die Schema-Version muss eine Ganzzahl sein.',

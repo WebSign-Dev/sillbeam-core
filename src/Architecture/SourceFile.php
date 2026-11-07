@@ -13,9 +13,10 @@ final readonly class SourceFile
 {
     /** @param list<class-string> $classes
      * @param array<class-string, string>                               $descriptors
+     * @param list<array{name: string, type: string}>                   $symbols
      * @param list<array{class: string, line: int, kind?: 'attribute'}> $references
      */
-    public function __construct(public string $path, public array $classes, public array $descriptors, public array $references = [])
+    public function __construct(public string $path, public array $classes, public array $descriptors, public array $references = [], public array $symbols = [])
     {
     }
 }
