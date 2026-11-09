@@ -33,8 +33,8 @@ final class SillbeamRouteLoader extends Loader
      */
     public function __construct(
         private readonly AttributeFileLoader $attributes,
-        private readonly ModuleRegistryInterface $modules,
-        private readonly ProjectRegistryInterface $projects,
+        private readonly ?ModuleRegistryInterface $modules,
+        private readonly ?ProjectRegistryInterface $projects,
         private readonly array $resources = [],
         private readonly array $controllerFiles = [],
         private readonly array $configurationResources = [],
@@ -56,6 +56,29 @@ final class SillbeamRouteLoader extends Loader
         }
         $this->loaded = true;
         $routes = new RouteCollection();
+        $this->addArchitectureRoutes($routes);
+        foreach ($this->resources as $path) {
+            $routes->addResource(is_dir($path) ? new DirectoryResource($path, '/\\.php$/') : (is_file($path) ? new FileResource($path) : new FileExistenceResource($path)));
+        }
+
+        foreach ($this->configurationResources as $path) {
+            $routes->addResource(is_dir($path) ? new DirectoryResource($path) : (is_file($path) ? new FileResource($path) : new FileExistenceResource($path)));
+        }
+
+        return $routes;
+    }
+
+    public function supports(mixed $resource, ?string $type = null): bool
+    {
+        return 'sillbeam' === $type;
+    }
+
+    private function addArchitectureRoutes(RouteCollection $routes): void
+    {
+        // Keep the configured import resolvable during cache warmup with integration deferred.
+        if (null === $this->modules || null === $this->projects) {
+            return;
+        }
         if ([] === $this->projects->all()) {
             foreach ($this->modules->forApplication() as $module) {
                 $this->addModule($routes, $module);
@@ -74,20 +97,6 @@ final class SillbeamRouteLoader extends Loader
                 $routes->addCollection($collection);
             }
         }
-        foreach ($this->resources as $path) {
-            $routes->addResource(is_dir($path) ? new DirectoryResource($path, '/\\.php$/') : (is_file($path) ? new FileResource($path) : new FileExistenceResource($path)));
-        }
-
-        foreach ($this->configurationResources as $path) {
-            $routes->addResource(is_dir($path) ? new DirectoryResource($path) : (is_file($path) ? new FileResource($path) : new FileExistenceResource($path)));
-        }
-
-        return $routes;
-    }
-
-    public function supports(mixed $resource, ?string $type = null): bool
-    {
-        return 'sillbeam' === $type;
     }
 
     private function addModule(RouteCollection $routes, ModuleDefinition $module): void

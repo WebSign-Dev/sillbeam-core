@@ -149,21 +149,20 @@ The shared result also powers [CLI architecture reporting](cli.md), including th
 
 ## Development and production lifecycle
 
-The policy follows Symfony's existing `kernel.debug` flag, normally controlled by `APP_DEBUG`. No additional architecture configuration is required. The environment name alone does not select the policy.
+When Symfony compiles a container, Core runs the existing analyzer. An invalid or incomplete result keeps its findings and defers the entire graph-dependent integration. No module or Project registry, automatic services or Doctrine mappings are generated. The `type: sillbeam` route import contributes no routes in this state, so Symfony can still load native routes and warm its routing cache.
 
 | Operation | Validation |
 | --- | --- |
-| Debug container compilation, including a cold HTTP request | Full existing analyzer; invalid input rejects compilation with detailed findings |
-| Warm debug request | Symfony checks tracked resources; relevant source/configuration changes rebuild and revalidate the container |
-| CLI cold container compilation, with or without debug | Full analyzer; invalid input rejects compilation |
-| `cache:clear` or `cache:warmup`, including an already warm cache | Fresh report from the current Symfony/Composer configuration before the command proceeds; failures return nonzero |
-| Non-debug HTTP with a compiled container | Uses the compiled Module/Project registries, services, routing and Doctrine mappings; no source analysis |
-| Non-debug HTTP without a compiled container | Compilation is refused before Sillbeam discovery/analysis with generic HTTP 503, `Service temporarily unavailable.` |
-| Explicit `sillbeam:architecture` | Fresh analysis in either environment; text/JSON and exit codes remain as documented in [CLI reporting](cli.md) |
+| CLI or debug container compilation | Analyzes once per container build and integrates Core only if the result is valid |
+| `cache:clear`, `cache:warmup` and Composer auto-scripts | Follow Symfony's cache lifecycle. Core findings alone allow these operations to succeed |
+| Warm debug request | Symfony checks tracked source and configuration resources and rebuilds when they change |
+| Non-debug HTTP with a compiled container | Uses the previously built state without analyzing source files |
+| Non-debug HTTP without a compiled container | Refuses compilation before discovery with HTTP 503, `Service temporarily unavailable.` |
+| Explicit `sillbeam:architecture` with the Core console adapter | Analyzes current sources without compiling the container, with the documented [JSON and exit codes](cli.md) |
 
-The cold-request restriction also covers CLI-based HTTP workers using `Kernel::handle()` and Symfony's `APP_RUNTIME_MODE` web context. Production must run with debug disabled so Symfony's normal error rendering does not expose exception details to visitors. Development exceptions and text reports include the rule, available module/project/file/line context and a rule-specific remediation hint. JSON reports retain schema version 1 and include available hints as `findings[].context.suggestion`.
+The cold HTTP policy also covers CLI-based workers using `Kernel::handle()` and Symfony's web runtime mode. The standard Symfony Console Application can display the architecture report stored in a successfully compiled container. Use the Core console adapter for fresh CI checks and for diagnostics when Symfony cannot compile the container. Configuration must still be readable to prepare a kernel-based report. Doctor checks installation and bootstrap evidence.
 
-Build preflight applies even with `cache:clear --no-warmup` and `cache:warmup --no-optional-warmers`. It uses the same analyzer as compilation and reporting, preserves application bundle-initialization hooks, and reads changed bundle registration rather than trusting a cached production bundle list. It works with the ordinary Symfony Console Application; the reporting adapter is only needed to retrieve reports when container boot itself fails.
+Symfony and Composer still enforce their own requirements. A native service that requires a deferred Core registry can fail autowiring. A native route or service import can fail on a syntax error that Core detected independently. A missing bundle or PHP package required by the application can prevent boot. Core configuration errors and unexpected exceptions still propagate. If Symfony requires the missing package during boot, Composer must install it before running the application's cache scripts.
 
 Create each production release with its own fresh Symfony cache/build directory, then run:
 
@@ -173,4 +172,4 @@ APP_ENV=prod APP_DEBUG=0 php bin/console cache:warmup
 APP_ENV=prod APP_DEBUG=0 php bin/console sillbeam:architecture --format=json
 ```
 
-Stop deployment on any nonzero exit code and only switch traffic after successful warmup/validation. `--no-warmup` validates but does not prepare an HTTP-ready release. Do not edit source files underneath a running production container or reuse another release's compiled cache: warm production requests deliberately trust the previously built state. A rejected new build does not revoke the running release's valid state. Merely booting an already cached CLI container is not a fresh architecture check. No deployment or remote publication is performed by Sillbeam.
+Require a successful cache build and a successful explicit architecture check before switching traffic. A successful cache command can leave Core integration deferred. After repair, rebuild the container to restore module services, routes and mappings. Use a fresh build directory for each release because warm non-debug containers retain their compiled state.

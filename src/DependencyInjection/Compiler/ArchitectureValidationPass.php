@@ -10,19 +10,22 @@ use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 /**
- * Rejects containers missing compiled registries or their injectable interface aliases.
+ * Enforces registry definitions and aliases when Core runtime integration is active.
  *
  * @internal
  */
 final class ArchitectureValidationPass implements CompilerPassInterface
 {
     /**
-     * Verifies required compiled registry definitions and injectable aliases.
+     * Verifies required definitions unless analysis explicitly deferred integration.
      *
      * @throws \LogicException if registries or aliases are missing
      */
     public function process(ContainerBuilder $container): void
     {
+        if ($container->hasParameter('sillbeam.architecture.integration_deferred') && true === $container->getParameter('sillbeam.architecture.integration_deferred')) {
+            return;
+        }
         if (!$container->hasDefinition('sillbeam.module_registry') || !$container->hasDefinition('sillbeam.project_registry')) {
             throw new \LogicException('Sillbeam architecture registries were not compiled.');
         }

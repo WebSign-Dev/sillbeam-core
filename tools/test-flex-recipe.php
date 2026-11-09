@@ -235,6 +235,7 @@ PHP,
         $applicationFiles[$file] = file_get_contents($applicationDirectory.'/'.$file);
     }
     bootConsumer($applicationDirectory, $withDoctrine);
+    verifyMaintenanceWithInvalidArchitecture($applicationDirectory, $temporaryDirectory);
     uninstallRecipe($applicationDirectory);
     // Flex owns the recipe destination even if it existed; document and test this boundary.
     unset($applicationFiles['config/routes/sillbeam.yaml']);
@@ -316,8 +317,7 @@ function runComposer(string $workingDirectory, string $operation = 'install'): s
         'composer',
         $operation,
         '--no-interaction',
-        '--no-progress',
-        '--prefer-dist',
+        ...('dump-autoload' === $operation ? [] : ['--no-progress', '--prefer-dist']),
     ], [\STDIN, $output, $output], $pipes, $workingDirectory);
 
     if (!is_resource($process)) {
@@ -334,7 +334,7 @@ function runComposer(string $workingDirectory, string $operation = 'install'): s
     fwrite(\STDOUT, $contents);
 
     if (0 !== $exitCode) {
-        throw new RuntimeException(sprintf('Composer exited with status %d.', $exitCode));
+        throw new RuntimeException(sprintf('Composer %s exited with status %d.', $operation, $exitCode)."\n".$contents);
     }
 
     return $contents;
@@ -362,6 +362,69 @@ function consumerConsole(string $directory, array $arguments, int $expected): st
     }
 
     return $text;
+}
+
+/** Exercises Flex's real symfony-cmd auto-script in a disposable consumer. */
+function verifyMaintenanceWithInvalidArchitecture(string $directory, string $temporaryDirectory): void
+{
+    $module = $directory.'/src/Module/Hello/HelloModule.php';
+    $valid = (string) file_get_contents($module);
+    file_put_contents($module, '<?php namespace App\Module\Hello; #[\Sillbeam\Core\Module\Attribute\SillbeamModule(dependencies: [\Missing\Module::class])] final class HelloModule {}');
+
+    $kernelFile = $directory.'/src/Kernel.php';
+    $kernel = (string) file_get_contents($kernelFile);
+    $boot = <<<'PHP'
+public function boot(): void {
+    parent::boot();
+    if (!class_exists(\SillbeamLifecyclePackage\Dependency::class)) {
+        throw new \RuntimeException('The application requires '.\SillbeamLifecyclePackage\Dependency::class);
+    }
+}
+PHP;
+    file_put_contents($kernelFile, str_replace('public function getProjectDir()', $boot.' public function getProjectDir()', $kernel));
+    $failure = consumerConsole($directory, ['cache:clear'], 1);
+    assertSame(true, str_contains($failure, 'SillbeamLifecyclePackage\Dependency'), 'Symfony must report the missing application dependency.');
+    assertSame(false, str_contains($failure, 'dependency.unknown'), 'The missing application class was misclassified as a Core finding.');
+    $report = json_decode(consumerConsole($directory, ['sillbeam:architecture', '--format=json'], 1), true, flags: \JSON_THROW_ON_ERROR);
+    assertSame('dependency.unknown', $report['findings'][0]['rule'], 'Architecture diagnostic could not run with the broken container.');
+    $snapshot = json_decode(consumerConsole($directory, ['sillbeam:api', '--profile=analysis'], 1), true, flags: \JSON_THROW_ON_ERROR);
+    assertSame('dependency.unknown', $snapshot['diagnostics']['findings'][0]['rule'], 'Core Data API lost the architecture finding.');
+    $doctor = json_decode(consumerConsole($directory, ['sillbeam:doctor', '--format=json'], 2), true, flags: \JSON_THROW_ON_ERROR);
+    assertSame('not verified', $doctor['status'], 'Doctor changed how it reports the custom consumer bootstrap.');
+    assertSame([], $doctor['errors'], 'Doctor failed to inspect the installation before container boot.');
+
+    $package = $temporaryDirectory.'/lifecycle-dependency';
+    mkdir($package);
+    writeJson($package.'/composer.json', [
+        'name' => 'sillbeam-test/lifecycle-dependency',
+        'version' => '1.0.0',
+        'autoload' => ['psr-4' => ['SillbeamLifecyclePackage\\' => '']],
+    ]);
+    file_put_contents($package.'/Dependency.php', '<?php namespace SillbeamLifecyclePackage; class Dependency {}');
+
+    $composer = decodeJson($directory.'/composer.json');
+    $composer['require']['sillbeam-test/lifecycle-dependency'] = '1.0.0';
+    $composer['repositories'][] = ['type' => 'path', 'url' => $package, 'options' => ['symlink' => false]];
+    $composer['conflict'] = (object) $composer['conflict'];
+    $composer['scripts']['auto-scripts'] = ['cache:clear' => 'symfony-cmd'];
+    $composer['scripts']['post-autoload-dump'] = ['@auto-scripts'];
+    writeJson($directory.'/composer.json', $composer);
+
+    foreach (['update', 'install', 'dump-autoload'] as $operation) {
+        if ('install' === $operation) {
+            removeDirectory($directory.'/vendor');
+            removeDirectory($directory.'/var/cache');
+        }
+        $output = runComposer($directory, $operation);
+        assertSame(true, str_contains($output, 'Executing script cache:clear [OK]'), $operation.' did not run the Flex cache-clear auto-script.');
+    }
+    assertSame(true, is_file($directory.'/vendor/sillbeam-test/lifecycle-dependency/Dependency.php'), 'Composer did not install the missing package.');
+    consumerConsole($directory, ['about'], 0);
+    consumerConsole($directory, ['sillbeam:architecture', '--format=json'], 1);
+    file_put_contents($module, $valid);
+    file_put_contents($kernelFile, $kernel);
+    consumerConsole($directory, ['cache:clear'], 0);
+    consumerConsole($directory, ['sillbeam:architecture'], 0);
 }
 
 /** Manual corrections in a disposable consumer; Doctor itself must remain read-only. */

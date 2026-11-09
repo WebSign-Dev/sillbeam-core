@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Tests\Integration;
 
+use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Sillbeam\Core\Architecture\ArchitectureAnalyzer;
 use Sillbeam\Core\Architecture\ArchitectureValidationException;
 use Sillbeam\Core\Architecture\DiscoveryOptions;
+use Sillbeam\Core\Module\ModuleRegistryInterface;
+use Sillbeam\Core\Project\ProjectRegistryInterface;
 use Sillbeam\Core\Tests\Support\SourceWorkspace;
 use Sillbeam\Core\Tests\Support\TestApplicationKernel;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Console\Tester\CommandTester;
 
 final class ArchitectureAnalysisTest extends TestCase
 {
@@ -102,22 +107,37 @@ final class ArchitectureAnalysisTest extends TestCase
     }
 
     #[DataProvider('doctrineModes')]
-    public function testKernelRejectsAllCollectedViolationsBeforeRegisteringServices(bool $doctrine): void
+    public function testKernelReportsAllCollectedViolationsWithoutRegisteringRuntime(bool $doctrine): void
     {
         $this->source->php('src/Module/A/AModule.php', '#[\\Sillbeam\\Core\\Module\\Attribute\\SillbeamModule(dependencies: [\\Missing\\One::class])] final class AModule {}');
         $this->source->php('src/Module/B/BModule.php', '#[\\Sillbeam\\Core\\Module\\Attribute\\SillbeamModule(dependencies: [\\Missing\\Two::class])] final class BModule {}');
         $this->source->write('config/packages/framework.yaml', "framework: {secret: test, test: true}\n");
         $this->source->write('config/services.yaml', 'services: {}');
+        $this->source->php('src/Module/A/ModuleService.php', '#[\Symfony\Component\DependencyInjection\Attribute\AsAlias(id: "a.module_service", public: true)] final class ModuleService {}');
+        if ($doctrine) {
+            $entity = '#[\Doctrine\ORM\Mapping\Entity] final class Record { #[\Doctrine\ORM\Mapping\Id] #[\Doctrine\ORM\Mapping\Column] public int $id; }';
+            $nativeEntity = $this->source->php('src/Entity/Record.php', $entity);
+            $this->source->php('src/Module/A/Entity/Record.php', $entity);
+            $this->source->write('config/packages/doctrine.yaml', "doctrine:\n    dbal: { url: 'sqlite:///:memory:' }\n    orm:\n        auto_mapping: false\n        mappings:\n            Native:\n                type: attribute\n                is_bundle: false\n                dir: '%kernel.project_dir%/src/Entity'\n                prefix: '".$this->source->namespace."\\Entity'\n");
+        }
         $kernel = new TestApplicationKernel($this->source, $doctrine);
         try {
             $kernel->boot();
-            self::fail('Container boot must reject the invalid graph.');
-        } catch (ArchitectureValidationException $error) {
-            self::assertCount(2, $error->result->findings);
-            self::assertTrue($error->result->isComplete());
-            self::assertNull($error->result->architecture);
-            self::assertStringContainsString('Missing\\One', $error->getMessage());
-            self::assertStringContainsString('Missing\\Two', $error->getMessage());
+            self::assertFalse($kernel->getContainer()->has(ModuleRegistryInterface::class));
+            self::assertFalse($kernel->getContainer()->has(ProjectRegistryInterface::class));
+            self::assertFalse($kernel->getContainer()->has('a.module_service'));
+            if (isset($nativeEntity)) {
+                $manager = $kernel->getContainer()->get('doctrine.orm.entity_manager');
+                self::assertInstanceOf(EntityManagerInterface::class, $manager);
+                self::assertSame([$nativeEntity], array_map(static fn ($metadata): string => $metadata->getName(), $manager->getMetadataFactory()->getAllMetadata()));
+            }
+            $tester = new CommandTester((new Application($kernel))->find('sillbeam:architecture'));
+            self::assertSame(1, $tester->execute(['--format' => 'json']));
+            $report = json_decode($tester->getDisplay(), true, flags: \JSON_THROW_ON_ERROR);
+            self::assertTrue($report['complete']);
+            self::assertCount(2, $report['findings']);
+            self::assertStringContainsString('Missing\One', $report['findings'][0]['message']);
+            self::assertStringContainsString('Missing\Two', $report['findings'][1]['message']);
         } finally {
             $kernel->shutdown();
         }
@@ -196,13 +216,18 @@ final class ArchitectureAnalysisTest extends TestCase
         $this->source->write('src/Module/Broken/Broken.php', '<?php class {');
         $this->source->write('config/packages/framework.yaml', "framework: {secret: test, test: true}\n");
         $this->source->write('config/services.yaml', 'services: {}');
+        if ($doctrine) {
+            $this->source->write('config/packages/doctrine.yaml', "doctrine:\n    dbal: { url: 'sqlite:///:memory:' }\n    orm: { auto_mapping: false }\n");
+        }
         $kernel = new TestApplicationKernel($this->source, $doctrine);
         try {
             $kernel->boot();
-            self::fail('Container boot must fail on incomplete analysis.');
-        } catch (ArchitectureValidationException $error) {
-            self::assertFalse($error->result->isComplete());
-            self::assertSame('source.parse', $error->result->findings[0]->rule);
+            self::assertFalse($kernel->getContainer()->has(ModuleRegistryInterface::class));
+            $tester = new CommandTester((new Application($kernel))->find('sillbeam:architecture'));
+            self::assertSame(2, $tester->execute(['--format' => 'json']));
+            $report = json_decode($tester->getDisplay(), true, flags: \JSON_THROW_ON_ERROR);
+            self::assertFalse($report['complete']);
+            self::assertSame('source.parse', $report['findings'][0]['rule']);
         } finally {
             $kernel->shutdown();
         }

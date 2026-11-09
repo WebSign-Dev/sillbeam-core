@@ -21,9 +21,10 @@ $kernel = new $kernelClass(isset($argv[4]) ? 'invalid' : 'test', true);
 if (isset($argv[4])) {
     try {
         $kernel->boot();
-        throw new RuntimeException('Consumer accepted an active reference to a disabled module.');
-    } catch (LogicException $error) {
-        consumerAssert(str_contains($error->getMessage(), 'references an inactive module'), $error->getMessage());
+        consumerAssert(!$kernel->getContainer()->has(ModuleRegistryInterface::class), 'Invalid architecture registered a runtime graph.');
+        $tester = new CommandTester((new Application($kernel))->find('sillbeam:architecture'));
+        consumerAssert(1 === $tester->execute(['--format' => 'json']), 'Consumer accepted an active reference to a disabled module.');
+        consumerAssert(str_contains($tester->getDisplay(), 'references an inactive module'), $tester->getDisplay());
     } finally {
         $kernel->shutdown();
     }

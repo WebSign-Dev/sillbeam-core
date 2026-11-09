@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\DependencyInjection;
 
+use Sillbeam\Core\Architecture\ArchitectureAnalysisResult;
 use Sillbeam\Core\Architecture\ArchitectureAnalyzer;
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\CompiledArchitecture;
@@ -16,17 +17,14 @@ use Sillbeam\Core\Architecture\Console\ReportCommand;
 use Sillbeam\Core\Architecture\DescriptorCreator;
 use Sillbeam\Core\Architecture\DiscoveryOptions;
 use Sillbeam\Core\Architecture\DiscoveryOptionsResolver;
-use Sillbeam\Core\Architecture\DiscoveryResult;
 use Sillbeam\Core\Architecture\DiscoveryRoot;
 use Sillbeam\Core\Architecture\FilesystemPath;
 use Sillbeam\Core\Architecture\PathMatcher;
 use Sillbeam\Core\Architecture\SourceInspector;
-use Sillbeam\Core\Console\ArchitectureBuildSubscriber;
 use Sillbeam\Core\Console\Doctor\DoctorCommand;
 use Sillbeam\Core\Kernel\Command\AboutCommand;
 use Sillbeam\Core\Kernel\Runtime\KernelInformation;
 use Sillbeam\Core\Kernel\Runtime\KernelInformationInterface;
-use Sillbeam\Core\Module\ModuleDefinition;
 use Sillbeam\Core\Module\ModuleRegistry;
 use Sillbeam\Core\Module\ModuleRegistryInterface;
 use Sillbeam\Core\Project\ProjectContext;
@@ -55,8 +53,7 @@ use Symfony\Component\DependencyInjection\Reference;
 final class SillbeamCoreExtension extends Extension implements PrependExtensionInterface
 {
     private ?ContainerBuilder $preparationContainer = null;
-    private ?CompiledArchitecture $architecture = null;
-    private ?DiscoveryResult $discovery = null;
+    private ?ArchitectureAnalysisResult $analysis = null;
     private ?DiscoveryOptions $options = null;
     private ?SourceInspector $inspector = null;
     /** @var array<string, mixed> */
@@ -83,26 +80,29 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         ArchitectureBuildContext::assertCompilationAllowed($container);
         $this->preparationContainer = $container;
         $this->doctrineMappings = [];
+        $this->configurationResources = [];
         foreach ($container->getResources() as $resource) {
             if ($resource instanceof FileResource) {
                 $this->configurationResources[] = $resource->getResource();
             }
         }
-        $this->architecture = null;
+        $this->analysis = null;
         [$configs, $config] = $this->resolveConfiguration($container->getExtensionConfig($this->getAlias()), $container);
         $this->config = $config;
         if ($config['doctrine']['enabled']) {
-            $this->build($configs, $container);
-            $this->prependDoctrine($container);
+            $this->analyze($configs, $config, $container);
+            if (null !== $this->analysis?->architecture) {
+                $this->prependDoctrine($container, $this->analysis->architecture);
+            }
         }
     }
 
     /**
-     * Validates architecture and mutates the container with compiled services, registries and tracked resources.
+     * Registers diagnostics and tracked resources, and integrates only a validated architecture.
      *
      * @param array<array-key, array<string, mixed>> $configs
      *
-     * @throws \LogicException                                                         if validation fails or Doctrine configuration changed after prepend()
+     * @throws \LogicException                                                         if build state is inconsistent or Doctrine configuration changed after prepend()
      * @throws \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException on cold non-debug HTTP compilation
      */
     public function load(array $configs, ContainerBuilder $container): void
@@ -112,18 +112,20 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         [$configs, $config] = $this->resolveConfiguration($configs, $configurationContainer);
         if (null !== $this->preparationContainer && ($this->config['doctrine']['enabled'] || $config['doctrine']['enabled'])) {
             $options = (new DiscoveryOptionsResolver())->resolve($configurationContainer, $configs, $config);
-            if (null === $this->architecture || $config !== $this->config || $options != $this->options) {
+            if (null === $this->analysis || $config !== $this->config || $options != $this->options) {
                 // Doctrine may already have loaded the mappings prepared during prepend().
                 throw new \LogicException('Sillbeam configuration changed after prepend() while Doctrine integration is enabled. Register bundles that prepend Sillbeam configuration before SillbeamCoreBundle, or configure Sillbeam directly in the application.');
             }
         }
-        if (null === $this->architecture) {
+        if (null === $this->analysis) {
             // Without Doctrine, validate only after every bundle has prepended its configuration.
-            $this->build($configs, $configurationContainer);
+            $this->analyze($configs, $config, $configurationContainer);
         }
-        $architecture = $this->architecture ?? throw new \LogicException('Sillbeam architecture was not compiled.');
-        $discovery = $this->discovery ?? throw new \LogicException('Sillbeam discovery was not run.');
-        foreach ($discovery->resources as $resource) {
+        $analysis = $this->analysis ?? throw new \LogicException('Sillbeam architecture was not analyzed.');
+        $this->analysis = null;
+        $options = $this->options ?? throw new \LogicException('Missing discovery options.');
+        $resources = $analysis->discovery->resources ?? array_column($options->roots(), 'path');
+        foreach ($resources as $resource) {
             $container->addResource(is_dir($resource) ? new DirectoryResource($resource, '/\\.php$/') : (is_file($resource) ? new FileResource($resource) : new FileExistenceResource($resource)));
         }
         $projectDir = $container->getParameter('kernel.project_dir');
@@ -136,29 +138,26 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         // Also detect newly added configuration, including the first sillbeam.yaml.
         $configurationDirectory = $projectDir.'/config';
         $container->addResource(is_dir($configurationDirectory) ? new DirectoryResource($configurationDirectory) : new FileExistenceResource($configurationDirectory));
-        $modules = array_map(static fn ($module): array => get_object_vars($module), $architecture->modules);
-        $projects = array_map(static fn ($project): array => get_object_vars($project), $architecture->projects);
-        $container->register('sillbeam.module_registry', ModuleRegistry::class)->setArguments([$modules, $architecture->applicationModules, $architecture->projectModules]);
-        $container->setAlias(ModuleRegistryInterface::class, 'sillbeam.module_registry')->setPublic(true);
-        $container->register('sillbeam.project_registry', ProjectRegistry::class)->setArguments([$projects]);
-        $container->setAlias(ProjectRegistryInterface::class, 'sillbeam.project_registry')->setPublic(true);
-        $container->autowire(ProjectContext::class)->setArguments([new Reference('request_stack'), new Reference(ProjectRegistryInterface::class), new Reference(ModuleRegistryInterface::class)]);
-        $container->setAlias(ProjectContextInterface::class, ProjectContext::class)->setPublic(true);
+        $report = ArchitectureReport::fromAnalysis($analysis, $config, $projectDir);
+        // Source-derived diagnostic text may contain literal Symfony placeholder syntax.
+        $parameters = $container->getParameterBag();
+        $container->register(ArchitectureReport::class)->setArguments([
+            $parameters->escapeValue($report->data),
+            $parameters->escapeValue($report->presentation),
+        ]);
+        $architecture = $analysis->architecture;
         $container->register(SillbeamRouteLoader::class)->setArguments([
-            new Reference('routing.loader.attribute.file'), new Reference(ModuleRegistryInterface::class),
-            new Reference(ProjectRegistryInterface::class), $discovery->resources, $this->controllerFiles($architecture),
+            new Reference('routing.loader.attribute.file'),
+            null === $architecture ? null : new Reference(ModuleRegistryInterface::class),
+            null === $architecture ? null : new Reference(ProjectRegistryInterface::class),
+            $resources, null === $architecture ? [] : $this->controllerFiles($architecture),
             array_values(array_unique([...$this->configurationResources, $projectDir.'/config', $composer])),
         ])->addTag('routing.loader', ['priority' => 100]);
-        $this->loadServices($container, $architecture);
-        $container->autowire(KernelInformation::class)->setArguments([new Reference('kernel'), new Reference(ModuleRegistryInterface::class)]);
-        $container->setAlias(KernelInformationInterface::class, KernelInformation::class);
         $container->register(DoctorCommand::class)->setArguments([$projectDir, '%kernel.environment%', new Reference('kernel')])->setAutoconfigured(true);
-        $container->autowire(AboutCommand::class)->setAutoconfigured(true);
         $container->register(GraphCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->setAutoconfigured(true);
         $container->register(InspectModuleCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->setAutoconfigured(true);
         $container->register(ArchitectureCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->setAutoconfigured(true);
         $container->register(ReportCommand::class)->setArguments([new Reference(ArchitectureReport::class), $projectDir])->setAutoconfigured(true);
-        $options = $this->options ?? throw new \LogicException('Missing discovery options.');
         $rootDefinition = static fn (DiscoveryRoot $root): Definition => new Definition(DiscoveryRoot::class, [$root->path, $root->namespace, $root->excludes]);
         $container->register(DiscoveryOptions::class)->setArguments([
             $options->root, $options->namespace,
@@ -170,37 +169,47 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         foreach ([MakeModuleCommand::class, MakeProjectCommand::class] as $command) {
             $container->register($command)->setArguments([new Reference(DescriptorCreator::class)])->setAutoconfigured(true);
         }
-        $container->register(ArchitectureBuildSubscriber::class)->setArguments([new Reference('kernel')])->addTag('kernel.event_subscriber');
-        $container->setParameter('sillbeam.doctrine.mappings', $this->doctrineMappings);
+        if (!$analysis->isValid()) {
+            $container->setParameter('sillbeam.architecture.integration_deferred', true);
+
+            return;
+        }
+        $this->loadRuntime($container, $architecture ?? throw new \LogicException('Sillbeam architecture was not compiled.'), $analysis);
     }
 
-    /** @param array<array-key, array<string, mixed>> $configs */
-    private function build(array $configs, ContainerBuilder $container): void
+    private function loadRuntime(ContainerBuilder $container, CompiledArchitecture $architecture, ArchitectureAnalysisResult $analysis): void
     {
-        [$configs, $config] = $this->resolveConfiguration($configs, $container);
-        $this->config = $config;
-        $this->options = (new DiscoveryOptionsResolver())->resolve($container, $configs, $config);
-        $this->inspector = new SourceInspector();
-        $analysis = (new ArchitectureAnalyzer($this->inspector))->analyze($this->options, $config);
-        $analysis->throwIfInvalid();
-        $this->discovery = $analysis->discovery;
-        $architecture = $analysis->architecture ?? throw new \LogicException('Sillbeam architecture was not compiled.');
-        $references = $analysis->references;
-        $projectDir = $container->getParameter('kernel.project_dir');
-        if (!\is_string($projectDir)) {
-            throw new \LogicException('kernel.project_dir must be a string.');
-        }
-        $report = ArchitectureReport::fromAnalysis($analysis, $config, $projectDir);
-        $container->register(ArchitectureReport::class)->setArguments([$report->data, $report->presentation]);
         $modules = [];
         foreach ($architecture->modules as $class => $module) {
             $data = get_object_vars($module);
-            $data['dependencyReferences'] = $references[$class] ?? [];
-            $data['observedDependencies'] = array_values(array_unique(array_column($references[$class] ?? [], 'module')));
+            $data['dependencyReferences'] = $analysis->references[$class] ?? [];
+            $data['observedDependencies'] = array_values(array_unique(array_column($data['dependencyReferences'], 'module')));
             $data['activationReasons'] = $architecture->activationReasons($class);
-            $modules[$class] = new ModuleDefinition(...$data);
+            $modules[$class] = $data;
         }
-        $this->architecture = new CompiledArchitecture($modules, $architecture->projects, $architecture->applicationModules, $architecture->projectModules);
+        $projects = array_map(static fn ($project): array => get_object_vars($project), $architecture->projects);
+        $container->register('sillbeam.module_registry', ModuleRegistry::class)->setArguments([$modules, $architecture->applicationModules, $architecture->projectModules]);
+        $container->setAlias(ModuleRegistryInterface::class, 'sillbeam.module_registry')->setPublic(true);
+        $container->register('sillbeam.project_registry', ProjectRegistry::class)->setArguments([$projects]);
+        $container->setAlias(ProjectRegistryInterface::class, 'sillbeam.project_registry')->setPublic(true);
+        $container->autowire(ProjectContext::class)->setArguments([new Reference('request_stack'), new Reference(ProjectRegistryInterface::class), new Reference(ModuleRegistryInterface::class)]);
+        $container->setAlias(ProjectContextInterface::class, ProjectContext::class)->setPublic(true);
+        $this->loadServices($container, $architecture);
+        $container->autowire(KernelInformation::class)->setArguments([new Reference('kernel'), new Reference(ModuleRegistryInterface::class)]);
+        $container->setAlias(KernelInformationInterface::class, KernelInformation::class);
+        $container->autowire(AboutCommand::class)->setAutoconfigured(true);
+        $container->setParameter('sillbeam.doctrine.mappings', $this->doctrineMappings);
+    }
+
+    /**
+     * @param array<array-key, array<string, mixed>> $configs
+     * @param array<string, mixed>                   $config
+     */
+    private function analyze(array $configs, array $config, ContainerBuilder $container): void
+    {
+        $this->options = (new DiscoveryOptionsResolver())->resolve($container, $configs, $config);
+        $this->inspector = new SourceInspector();
+        $this->analysis = (new ArchitectureAnalyzer($this->inspector))->analyze($this->options, $config);
     }
 
     /**
@@ -224,9 +233,8 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         return [$configs, $config];
     }
 
-    private function prependDoctrine(ContainerBuilder $container): void
+    private function prependDoctrine(ContainerBuilder $container, CompiledArchitecture $architecture): void
     {
-        $architecture = $this->architecture ?? throw new \LogicException('Sillbeam architecture was not compiled.');
         $mappings = [];
         $definitions = array_values($architecture->projects);
         foreach ($architecture->usedModules() as $class) {

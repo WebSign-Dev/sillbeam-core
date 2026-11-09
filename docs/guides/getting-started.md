@@ -24,7 +24,8 @@ See [release status](../../README.md#release-status) and the [Flex guide](flex-r
 Development consumers can use this checkout through a local Composer path repository;
 the repository's Flex acceptance test uses a simulated 0.3.0 version, not a public tag.
 
-If an existing application cannot compile during Composer's auto-scripts, correct
+Core architecture findings allow Composer's cache auto-scripts to proceed with Core
+runtime integration deferred. If Symfony still cannot compile the application, correct
 that reported error or repeat the require command with `--no-scripts` to defer
 application scripts. After the manual corrections below, rerun the application's
 normal Composer auto-scripts (typically `composer run-script post-update-cmd`) and
