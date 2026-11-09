@@ -112,7 +112,7 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         [$configs, $config] = $this->resolveConfiguration($configs, $configurationContainer);
         if (null !== $this->preparationContainer && ($this->config['doctrine']['enabled'] || $config['doctrine']['enabled'])) {
             $options = (new DiscoveryOptionsResolver())->resolve($configurationContainer, $configs, $config);
-            if (null === $this->analysis || $config !== $this->config || $options != $this->options) {
+            if (null === $this->analysis || array_diff_key($config, ['locale' => true]) !== array_diff_key($this->config, ['locale' => true]) || $options != $this->options) {
                 // Doctrine may already have loaded the mappings prepared during prepend().
                 throw new \LogicException('Sillbeam configuration changed after prepend() while Doctrine integration is enabled. Register bundles that prepend Sillbeam configuration before SillbeamCoreBundle, or configure Sillbeam directly in the application.');
             }
@@ -221,7 +221,7 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
      */
     public function resolveConfiguration(array $configs, ContainerBuilder $container): array
     {
-        $configs = $container->resolveEnvPlaceholders($container->getParameterBag()->resolveValue($configs), true);
+        $configs = $this->resolvePlaceholders($configs, $container);
         $config = $this->processConfiguration(new Configuration(), $configs);
         $config = $container->getParameterBag()->resolveValue($config);
         $hasDoctrine = $container->hasExtension('doctrine');
@@ -231,6 +231,24 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         }
 
         return [$configs, $config];
+    }
+
+    /** Resolves just the locale using the same Symfony node and placeholder handling. */
+    public function resolveLocale(ContainerBuilder $container): string
+    {
+        $configs = array_map(static fn (array $config): array => array_intersect_key($config, ['locale' => true]), $container->getExtensionConfig($this->getAlias()));
+
+        return $this->processConfiguration(new Configuration(), $this->resolvePlaceholders($configs, $container))['locale'];
+    }
+
+    /**
+     * @param array<array-key, array<string, mixed>> $configs
+     *
+     * @return array<array-key, array<string, mixed>>
+     */
+    private function resolvePlaceholders(array $configs, ContainerBuilder $container): array
+    {
+        return $container->resolveEnvPlaceholders($container->getParameterBag()->resolveValue($configs), true);
     }
 
     private function prependDoctrine(ContainerBuilder $container, CompiledArchitecture $architecture): void

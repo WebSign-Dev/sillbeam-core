@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\DependencyInjection;
 
+use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
@@ -19,6 +20,7 @@ final class Configuration implements ConfigurationInterface
     {
         $tree = new TreeBuilder('sillbeam');
         $children = $tree->getRootNode()->children();
+        $children->enumNode('locale')->values(CoreTranslator::locales())->defaultValue(CoreTranslator::DEFAULT_LOCALE)->end();
         $discovery = $children->arrayNode('discovery')->addDefaultsIfNotSet()->children();
         $discovery->scalarNode('root')->defaultValue('%kernel.project_dir%/src')->cannotBeEmpty()->end();
         $discovery->scalarNode('namespace')->defaultNull()->end();

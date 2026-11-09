@@ -8,6 +8,7 @@ use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Sillbeam\Core\Console\KernelArchitectureReporter;
 use Sillbeam\Core\Module\ModuleRegistryInterface;
 use Sillbeam\Core\SillbeamCoreBundle;
 use Sillbeam\Core\Tests\Support\SourceWorkspace;
@@ -31,6 +32,7 @@ final class PrependConfigurationTest extends TestCase
             'services' => ['integrations' => ['services' => ['exclude' => ['Service.php']]]],
             'entities' => ['integrations' => ['entities' => ['Model']]],
             'doctrine' => ['doctrine' => false],
+            'locale' => ['locale' => 'de'],
             'unchanged' => [],
         ];
         foreach ([false, true] as $doctrine) {
@@ -61,7 +63,7 @@ final class PrependConfigurationTest extends TestCase
             if ($doctrine) {
                 $source->write('config/packages/doctrine.yaml', "doctrine: { dbal: { url: 'sqlite:///:memory:' }, orm: { auto_mapping: false } }");
             }
-            if ($doctrine && !$before && 'unchanged' !== $case) {
+            if ($doctrine && !$before && !\in_array($case, ['unchanged', 'locale'], true)) {
                 $this->expectException(\LogicException::class);
                 $this->expectExceptionMessage('Sillbeam configuration changed after prepend()');
                 $kernel->boot();
@@ -69,6 +71,9 @@ final class PrependConfigurationTest extends TestCase
                 return;
             }
             $kernel->boot();
+            if ('locale' === $case) {
+                self::assertSame('de', (new KernelArchitectureReporter())->projectLocale($kernel));
+            }
             $container = $kernel->getContainer();
             $registry = $container->get(ModuleRegistryInterface::class);
             self::assertInstanceOf(ModuleRegistryInterface::class, $registry);

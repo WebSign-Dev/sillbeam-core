@@ -31,7 +31,7 @@ deptrac:
         Project: [Architecture, Module, I18n]
         Kernel: [Module, Presentation, I18n]
         Routing: [Module, Project]
-        DependencyInjection: [Architecture, Module, Project, Kernel, Routing, Console, Doctor]
+        DependencyInjection: [Architecture, Module, Project, Kernel, Routing, Console, Doctor, I18n]
         Console: [Api, Architecture, DependencyInjection, Doctor, Presentation, I18n]
         Doctor: [Architecture, DependencyInjection, Presentation, I18n]
         Bundle: [DependencyInjection]

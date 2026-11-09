@@ -6,6 +6,7 @@ namespace Sillbeam\Core\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
 use Sillbeam\Core\Console\Application;
+use Sillbeam\Core\I18n\UserLocaleStore;
 use Sillbeam\Core\Tests\Support\SourceWorkspace;
 use Sillbeam\Core\Tests\Support\TestApplicationKernel;
 use Symfony\Component\Console\Tester\ApplicationTester;
@@ -38,6 +39,38 @@ final class CoreLiveApiTest extends TestCase
         self::assertTrue($data['architecture']['modules'][0]['active']);
         self::assertSame(['en'], $data['i18n']['included_locales']);
         self::assertArrayNotHasKey('doctor', $data);
+    }
+
+    public function testPersonalAndProjectPreferencesDoNotChangeApiLocaleContracts(): void
+    {
+        $this->module('A');
+        $this->source->write('config/packages/sillbeam.yaml', 'sillbeam: { locale: de }');
+        $previous = [];
+        foreach (['HOME', 'XDG_CONFIG_HOME', 'APPDATA', 'LOCALAPPDATA'] as $name) {
+            $previous[$name] = getenv($name);
+            putenv($name.'='.$this->source->directory.'/user');
+        }
+        try {
+            UserLocaleStore::fromEnvironment()->set('de');
+            foreach ([
+                [[], ['en']],
+                [['--locale' => 'de'], ['de']],
+                [['--profile' => 'analysis'], ['en', 'de']],
+            ] as [$options, $locales]) {
+                [$code, $json, $stderr] = $this->runCommand('sillbeam:api', $options);
+                self::assertSame(0, $code, $stderr);
+                $data = json_decode($json, true, flags: \JSON_THROW_ON_ERROR);
+                self::assertSame($locales, $data['i18n']['included_locales']);
+            }
+            [$code, $json, $stderr] = $this->runCommand('sillbeam:api', ['--profile' => 'analysis', '--locale' => 'de']);
+            self::assertSame(4, $code);
+            self::assertSame('', $json);
+            self::assertNotSame('', $stderr);
+        } finally {
+            foreach ($previous as $name => $value) {
+                putenv(false === $value ? $name : $name.'='.$value);
+            }
+        }
     }
 
     public function testGroupedViolationRetainsReferencesAndLocalizedDetails(): void

@@ -46,6 +46,35 @@ The analyzer and configuration processor are exactly those used by container val
 
 The existing bootstrap selects the kernel, environment and debug mode as usual, including any Symfony Runtime/Dotenv setup. Reporting does not scan for a second configuration file, load another `.env` interpretation or assume an `App\Kernel` class. Custom kernels must support Symfony's uncompiled `initializeBundles`/`buildContainer` preparation hooks; this integration is tested on Symfony 7.4 and 8.1.
 
+## Locale configuration
+
+The Core locale resolver accepts an explicit locale, then checks the personal
+preference and the project's Symfony configuration. It defaults to English.
+Supported values are `en` and `de`.
+
+```yaml
+sillbeam:
+    locale: de
+```
+
+The personal preference lives in a file named `sillbeam/locale` under the user
+configuration directory.
+
+| Platform | User configuration directory |
+| --- | --- |
+| Linux | `$XDG_CONFIG_HOME` or `$HOME/.config` |
+| macOS | `$HOME/Library/Application Support` |
+| Windows | `%APPDATA%` or `%LOCALAPPDATA%` |
+
+A missing preference lets the resolver use the project default. A corrupt or
+unreadable preference reports the file path when the resolver needs it. A
+supported explicit locale takes precedence even in that case. Setting or
+resetting the preference requires an explicit call to the store. The locale
+command and wiring for human-facing CLI commands are outside this change.
+
+Core Data keeps its own locale selection. Live defaults to English and accepts
+an explicit supported locale. Analysis includes both languages.
+
 ## Output and exit codes
 
 | Exit | Meaning |
