@@ -43,7 +43,7 @@ final readonly class GraphView
         foreach ($projects as $index => $item) {
             $group = \sprintf('project_scope_%04d', $index + 1);
             $projectGroups[$item['class']] = $group;
-            $groups[$group] = $translator->text('cli.graph.label.groups', ['id' => $item['id'], 'class' => $projectCounts[strtolower($item['id'])] > 1 ? ' | '.$item['class'] : '', 'state' => null === $item['modules'] ? 'unknown' : 'validated']);
+            $groups[$group] = $translator->text('cli.graph.label.groups', ['id' => $item['id'], 'class' => $projectCounts[strtolower($item['id'])] > 1 ? ' | '.$item['class'] : '', 'state' => $translator->text(null === $item['modules'] ? 'cli.label.unknown' : 'cli.label.validated')]);
         }
         $groups['unknown_owner'] = $translator->text('cli.graph.label.missing_owner_group');
         $cycles = [];
@@ -73,7 +73,7 @@ final readonly class GraphView
                     $label .= ' | '.self::descriptorLabel($class, array_column($collisions, 'class'));
                 }
             }
-            $label .= "\nstate=".$state.(false === $item['enabled'] && 'disabled' !== $state ? $translator->text('cli.graph.label.disabled') : '').(isset($cycles[$class]) ? $translator->text('cli.graph.label.cycle') : '');
+            $label .= "\n".$translator->text('cli.graph.label.node_state', ['state' => $translator->text('cli.label.'.$state)]).(false === $item['enabled'] && 'disabled' !== $state ? $translator->text('cli.graph.label.disabled') : '').(isset($cycles[$class]) ? $translator->text('cli.graph.label.cycle') : '');
             if ('shared' === $item['scope'] && null === $context && [] !== $projects) {
                 $memberships = [];
                 foreach ($projects as $owner) {
@@ -114,7 +114,7 @@ final readonly class GraphView
         $nodes = array_intersect_key($nodes, $visible);
         usort($edges, static fn (array $a, array $b): int => [$a['source'], $a['target'], $a['observed']] <=> [$b['source'], $b['target'], $b['observed']]);
         $complete = $report->data['complete'] && ($report->presentation['module_inspection']['references_complete'] ?? false);
-        $notes = [$translator->text('cli.graph.label.analysis', ['status' => $report->data['status'], 'evidence' => $translator->text($report->data['valid'] ? 'cli.graph.label.validated' : 'cli.graph.label.evidence')]),
+        $notes = [$translator->text('cli.graph.label.analysis', ['status' => $translator->text('cli.label.'.$report->data['status']), 'evidence' => $translator->text($report->data['valid'] ? 'cli.graph.label.validated' : 'cli.graph.label.evidence')]),
             $report->data['complete'] ? $translator->text('cli.graph.label.complete') : $translator->text('cli.graph.label.incomplete'),
             $complete ? $translator->text('cli.graph.label.refs_complete') : $translator->text('cli.graph.label.refs_incomplete')];
         if (null !== $context) {
@@ -129,7 +129,7 @@ final readonly class GraphView
         foreach ($projects as $item) {
             if ([] === array_filter($nodes, static fn (array $node): bool => $node['group'] === $projectGroups[$item['class']])) {
                 if (null === $context || $context['class'] === $item['class']) {
-                    $notes[] = $translator->text('cli.graph.label.membership', ['id' => $item['id'], 'state' => null === $item['modules'] ? 'unknown' : 'validated']);
+                    $notes[] = $translator->text('cli.graph.label.membership', ['id' => $item['id'], 'state' => $translator->text(null === $item['modules'] ? 'cli.label.unknown' : 'cli.label.validated')]);
                 }
             }
         }
@@ -138,7 +138,7 @@ final readonly class GraphView
         $findings = $report->data['findings'];
         usort($findings, static fn (array $a, array $b): int => [$a['rule'], $a['message']] <=> [$b['rule'], $b['message']]);
         foreach ($findings as $finding) {
-            $notes[] = $finding['rule'].': '.$finding['message'];
+            $notes[] = $finding['rule'].': '.$report->findingMessage($finding);
         }
 
         return new self($nodes, $edges, $groups, $notes);

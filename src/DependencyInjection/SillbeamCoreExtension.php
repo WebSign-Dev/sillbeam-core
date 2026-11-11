@@ -22,6 +22,10 @@ use Sillbeam\Core\Architecture\FilesystemPath;
 use Sillbeam\Core\Architecture\PathMatcher;
 use Sillbeam\Core\Architecture\SourceInspector;
 use Sillbeam\Core\Console\Doctor\DoctorCommand;
+use Sillbeam\Core\Console\LocaleCommand;
+use Sillbeam\Core\I18n\CoreTranslator;
+use Sillbeam\Core\I18n\LocaleResolver;
+use Sillbeam\Core\I18n\UserLocaleStore;
 use Sillbeam\Core\Kernel\Command\AboutCommand;
 use Sillbeam\Core\Kernel\Runtime\KernelInformation;
 use Sillbeam\Core\Kernel\Runtime\KernelInformationInterface;
@@ -138,7 +142,7 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         // Also detect newly added configuration, including the first sillbeam.yaml.
         $configurationDirectory = $projectDir.'/config';
         $container->addResource(is_dir($configurationDirectory) ? new DirectoryResource($configurationDirectory) : new FileExistenceResource($configurationDirectory));
-        $report = ArchitectureReport::fromAnalysis($analysis, $config, $projectDir);
+        $report = ArchitectureReport::fromLocalizedAnalysis($analysis, $config, $projectDir, new CoreTranslator(), compiled: true);
         // Source-derived diagnostic text may contain literal Symfony placeholder syntax.
         $parameters = $container->getParameterBag();
         $container->register(ArchitectureReport::class)->setArguments([
@@ -153,11 +157,15 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
             $resources, null === $architecture ? [] : $this->controllerFiles($architecture),
             array_values(array_unique([...$this->configurationResources, $projectDir.'/config', $composer])),
         ])->addTag('routing.loader', ['priority' => 100]);
-        $container->register(DoctorCommand::class)->setArguments([$projectDir, '%kernel.environment%', new Reference('kernel')])->setAutoconfigured(true);
-        $container->register(GraphCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->setAutoconfigured(true);
-        $container->register(InspectModuleCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->setAutoconfigured(true);
-        $container->register(ArchitectureCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->setAutoconfigured(true);
-        $container->register(ReportCommand::class)->setArguments([new Reference(ArchitectureReport::class), $projectDir])->setAutoconfigured(true);
+        $container->register(UserLocaleStore::class)->setFactory([UserLocaleStore::class, 'fromEnvironment']);
+        $container->register(LocaleResolver::class)->setFactory([LocaleResolver::class, 'forProject'])
+            ->setArguments([new Reference(UserLocaleStore::class), $config['locale']]);
+        $container->register(LocaleCommand::class)->setArguments([new Reference(UserLocaleStore::class), new Reference(LocaleResolver::class)])->setAutoconfigured(true);
+        $container->register(DoctorCommand::class)->setArguments([$projectDir, '%kernel.environment%', new Reference('kernel')])->addMethodCall('useLocaleResolver', [new Reference(LocaleResolver::class)])->setAutoconfigured(true);
+        $container->register(GraphCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->addMethodCall('useLocaleResolver', [new Reference(LocaleResolver::class)])->setAutoconfigured(true);
+        $container->register(InspectModuleCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->addMethodCall('useLocaleResolver', [new Reference(LocaleResolver::class)])->setAutoconfigured(true);
+        $container->register(ArchitectureCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->addMethodCall('useLocaleResolver', [new Reference(LocaleResolver::class)])->setAutoconfigured(true);
+        $container->register(ReportCommand::class)->setArguments([new Reference(ArchitectureReport::class), $projectDir])->addMethodCall('useLocaleResolver', [new Reference(LocaleResolver::class)])->setAutoconfigured(true);
         $rootDefinition = static fn (DiscoveryRoot $root): Definition => new Definition(DiscoveryRoot::class, [$root->path, $root->namespace, $root->excludes]);
         $container->register(DiscoveryOptions::class)->setArguments([
             $options->root, $options->namespace,
@@ -167,7 +175,7 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         ]);
         $container->register(DescriptorCreator::class)->setArguments([new Reference(DiscoveryOptions::class)]);
         foreach ([MakeModuleCommand::class, MakeProjectCommand::class] as $command) {
-            $container->register($command)->setArguments([new Reference(DescriptorCreator::class)])->setAutoconfigured(true);
+            $container->register($command)->setArguments([new Reference(DescriptorCreator::class)])->addMethodCall('useLocaleResolver', [new Reference(LocaleResolver::class)])->setAutoconfigured(true);
         }
         if (!$analysis->isValid()) {
             $container->setParameter('sillbeam.architecture.integration_deferred', true);
@@ -197,7 +205,7 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         $this->loadServices($container, $architecture);
         $container->autowire(KernelInformation::class)->setArguments([new Reference('kernel'), new Reference(ModuleRegistryInterface::class)]);
         $container->setAlias(KernelInformationInterface::class, KernelInformation::class);
-        $container->autowire(AboutCommand::class)->setAutoconfigured(true);
+        $container->register(AboutCommand::class)->setArguments([new Reference(KernelInformationInterface::class)])->addMethodCall('useLocaleResolver', [new Reference(LocaleResolver::class)])->setAutoconfigured(true);
         $container->setParameter('sillbeam.doctrine.mappings', $this->doctrineMappings);
     }
 

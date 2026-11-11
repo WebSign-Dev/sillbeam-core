@@ -23,14 +23,20 @@ use Symfony\Component\HttpKernel\KernelInterface;
 #[AsCommand(name: 'sillbeam:api', description: 'Export the Sillbeam architecture snapshot as JSON.')]
 final class CoreDataCommand extends Command
 {
-    public function __construct(private readonly CoreDataProviderInterface $provider)
-    {
+    /** @param (\Closure(?string): CoreTranslator)|null $errorTranslator */
+    public function __construct(
+        private readonly CoreDataProviderInterface $provider,
+        private readonly CoreTranslator $translator = new CoreTranslator(),
+        private readonly ?\Closure $errorTranslator = null,
+    ) {
         parent::__construct();
+        $this->setDescription($translator->text('cli.command.'.(string) $this->getName()));
     }
 
-    public static function forKernel(KernelInterface $kernel): self
+    /** @param (\Closure(?string): CoreTranslator)|null $errorTranslator */
+    public static function forKernel(KernelInterface $kernel, CoreTranslator $translator = new CoreTranslator(), ?\Closure $errorTranslator = null): self
     {
-        return new self(self::providerForKernel($kernel));
+        return new self(self::providerForKernel($kernel), $translator, $errorTranslator);
     }
 
     public static function providerForKernel(KernelInterface $kernel): CoreDataProvider
@@ -45,9 +51,9 @@ final class CoreDataCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption('profile', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.profile'), 'live');
-        $this->addOption('locale', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.locale'));
-        $this->addOption('schema-version', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.version'), '1');
+        $this->addOption('profile', null, InputOption::VALUE_REQUIRED, $this->translator->text('cli.api.profile'), 'live');
+        $this->addOption('locale', null, InputOption::VALUE_REQUIRED, $this->translator->text('cli.api.locale'));
+        $this->addOption('schema-version', null, InputOption::VALUE_REQUIRED, $this->translator->text('cli.api.version'), '1');
     }
 
     public function run(InputInterface $input, OutputInterface $output): int
@@ -55,7 +61,7 @@ final class CoreDataCommand extends Command
         try {
             return parent::run($input, $output);
         } catch (\Throwable $error) {
-            return self::failure($error, $output, self::translator($input));
+            return self::failure($error, $output, $this->errorLanguage($input));
         }
     }
 
@@ -112,10 +118,11 @@ final class CoreDataCommand extends Command
         return 4;
     }
 
-    private static function translator(InputInterface $input): CoreTranslator
+    private function errorLanguage(InputInterface $input): CoreTranslator
     {
-        $locale = $input->getParameterOption('--locale', CoreTranslator::DEFAULT_LOCALE, true);
+        $locale = $input->getParameterOption('--locale', null, true);
+        $explicit = \is_string($locale) && \in_array($locale, CoreTranslator::locales(), true) ? $locale : null;
 
-        return new CoreTranslator(\is_string($locale) && \in_array($locale, CoreTranslator::locales(), true) ? $locale : CoreTranslator::DEFAULT_LOCALE);
+        return $this->errorTranslator?->__invoke($explicit) ?? (null === $explicit ? $this->translator : new CoreTranslator($explicit));
     }
 }

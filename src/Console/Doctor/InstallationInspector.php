@@ -24,6 +24,34 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class InstallationInspector
 {
+    /**
+     * Reads literal locale declarations in conventional Symfony YAML order.
+     * Doctor must not execute PHP, imports, or bundle hooks to choose its language.
+     */
+    public function projectLocale(string $directory, string $environment): ?string
+    {
+        $config = $directory.'/config';
+        $packages = [...(glob($config.'/packages/*.yaml') ?: []), ...(glob($config.'/packages/'.$environment.'/*.yaml') ?: [])];
+        if (is_file($config.'/services.yaml')) {
+            $packages[] = $config.'/services.yaml';
+            $packages[] = $config.'/services_'.$environment.'.yaml';
+        }
+        $locales = [];
+        foreach ($packages as $path) {
+            if (!is_file($path) || is_link($path)) {
+                continue;
+            }
+            $data = Yaml::parse($this->read($path, new CoreTranslator()));
+            foreach ([$data, $data['when@'.$environment] ?? null] as $document) {
+                if (\is_array($document['sillbeam'] ?? null) && \array_key_exists('locale', $document['sillbeam'])) {
+                    $locales[] = ['locale' => $document['sillbeam']['locale']];
+                }
+            }
+        }
+
+        return (new Processor())->processConfiguration(new Configuration(), $locales)['locale'];
+    }
+
     /** @return list<array{id: string, label: string, status: string, detail: string}> */
     public function inspect(string $directory, string $environment, ?string $kernelFile = null, CoreTranslator $translator = new CoreTranslator(), bool $safeErrors = false): array
     {

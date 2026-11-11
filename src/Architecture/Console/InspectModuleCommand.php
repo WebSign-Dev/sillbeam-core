@@ -6,10 +6,10 @@ namespace Sillbeam\Core\Architecture\Console;
 
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Console\Style\ConsoleStyle;
+use Sillbeam\Core\Console\Style\LocalizedCommand;
 use Sillbeam\Core\I18n\CoreError;
 use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -17,12 +17,12 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /** @internal Text inspection of one module from the existing shared architecture report. */
 #[AsCommand(name: 'sillbeam:inspect:module', description: 'Inspect one module, its activation and direct dependency evidence.')]
-final class InspectModuleCommand extends Command
+final class InspectModuleCommand extends LocalizedCommand
 {
-    /** @param ArchitectureReport|\Closure(): ArchitectureReport $report */
-    public function __construct(private readonly ArchitectureReport|\Closure $report, private readonly CoreTranslator $translator = new CoreTranslator())
+    /** @param ArchitectureReport|\Closure(CoreTranslator): ArchitectureReport $report */
+    public function __construct(private readonly ArchitectureReport|\Closure $report, CoreTranslator $translator = new CoreTranslator())
     {
-        parent::__construct();
+        parent::__construct($translator);
     }
 
     protected function configure(): void
@@ -36,7 +36,7 @@ final class InspectModuleCommand extends Command
     {
         try {
             return parent::run($input, $output);
-        } catch (\Symfony\Component\Console\Exception\ExceptionInterface $error) {
+        } catch (\Symfony\Component\Console\Exception\ExceptionInterface|\InvalidArgumentException $error) {
             (new ConsoleStyle($output))->error(CoreError::render($error, $this->translator));
 
             return 2;
@@ -53,7 +53,7 @@ final class InspectModuleCommand extends Command
 
             return 2;
         }
-        $report = ArchitectureReport::collect($this->report);
+        $report = ArchitectureReport::collectLocalized($this->report, $this->translator);
         $style->heading($this->translator->text('cli.inspect.heading'));
         try {
             $view = (new ModuleInspection($report))->select($identifier, $project);
@@ -62,7 +62,7 @@ final class InspectModuleCommand extends Command
             if (!$report->data['complete']) {
                 $this->findings($style, $report->data['findings'], new ModuleInspectionPresentation($report, $this->translator));
                 if ($output->isVerbose()) {
-                    $this->originals($style, $report->data['findings']);
+                    $this->originals($style, $report->data['findings'], $report);
                 }
             }
 
@@ -72,15 +72,15 @@ final class InspectModuleCommand extends Command
         $presentation = new ModuleInspectionPresentation($report, $this->translator);
         $outgoing = $presentation->relationships($view);
         $incoming = $presentation->relationships($view, true);
-        $style->text($this->translator->text('cli.inspect.module_label', ['module' => $presentation->label($module['class']), 'state' => ucfirst($view['state'])]), style: 'options=bold');
-        $style->text($this->translator->text('cli.inspect.scope_line', ['scope' => ucfirst($module['scope']), 'owner' => 'private' === $module['scope'] ? $this->translator->text('cli.inspect.owner_suffix', ['project' => $presentation->project($module['project'])]) : '']));
+        $style->text($this->translator->text('cli.inspect.module_label', ['module' => $presentation->label($module['class']), 'state' => ucfirst($this->translator->text('cli.label.'.$view['state']))]), style: 'options=bold');
+        $style->text($this->translator->text('cli.inspect.scope_line', ['scope' => ucfirst($this->translator->text('cli.label.'.$module['scope'])), 'owner' => 'private' === $module['scope'] ? $this->translator->text('cli.inspect.owner_suffix', ['project' => $presentation->project($module['project'])]) : '']));
         if (null !== $view['project']) {
             $style->text($this->translator->text('cli.inspect.project_context', ['project' => $presentation->project($view['project']['class'])]));
             if ($view['active'] !== $module['active']) {
-                $style->note($this->translator->text('cli.inspect.global_state', ['state' => null === $module['active'] ? 'unknown' : ($module['active'] ? 'active' : 'inactive')]));
+                $style->note($this->translator->text('cli.inspect.global_state', ['state' => $this->translator->text(null === $module['active'] ? 'cli.label.unknown' : ($module['active'] ? 'cli.label.active' : 'cli.label.inactive'))]));
             }
         }
-        $style->text($this->translator->text('cli.inspect.architecture', ['status' => ucfirst($report->data['status'])]));
+        $style->text($this->translator->text('cli.inspect.architecture', ['status' => ucfirst($this->translator->text('cli.label.'.$report->data['status']))]));
         $style->text($this->translator->text('cli.inspect.relationships', ['outgoing' => \count($outgoing), 'incoming' => \count($incoming)]));
         if (null === $view['active']) {
             $style->note($this->translator->text('cli.inspect.activation_unknown'));
@@ -109,10 +109,10 @@ final class InspectModuleCommand extends Command
             $this->findings($style, $view['blockers'], $presentation);
         }
         if ($output->isVerbose()) {
-            $this->technical($style, $view);
+            $this->technical($style, $view, $report);
         }
         if (0 !== $report->exitCode()) {
-            $style->note($this->translator->text('cli.inspect.whole', ['status' => $report->data['status']]));
+            $style->note($this->translator->text('cli.inspect.whole', ['status' => $this->translator->text('cli.label.'.$report->data['status'])]));
         }
 
         return $report->exitCode();
@@ -139,7 +139,7 @@ final class InspectModuleCommand extends Command
     /** Technical evidence is additive; no effective state is derived from configuration inputs.
      * @param array<string, mixed> $view
      */
-    private function technical(ConsoleStyle $style, array $view): void
+    private function technical(ConsoleStyle $style, array $view, ArchitectureReport $report): void
     {
         $module = $view['module'];
         $config = $view['configuration'];
@@ -147,17 +147,17 @@ final class InspectModuleCommand extends Command
         $style->text($this->translator->text('cli.inspect.technical'), style: 'options=bold');
         foreach ([
             'ID' => $module['id'], $this->translator->text('cli.inspect.descriptor_class') => $module['class'], $this->translator->text('cli.inspect.descriptor_file') => $module['descriptor'],
-            $this->translator->text('cli.inspect.scope') => $module['scope'], $this->translator->text('cli.inspect.owner') => $view['owner']['id'] ?? ('shared' === $module['scope'] ? $this->translator->text('cli.inspect.none_shared') : 'unknown'),
+            $this->translator->text('cli.inspect.scope') => $this->translator->text('cli.label.'.$module['scope']), $this->translator->text('cli.inspect.owner') => $view['owner']['id'] ?? ('shared' === $module['scope'] ? $this->translator->text('cli.inspect.none_shared') : $this->translator->text('cli.label.unknown')),
             $this->translator->text('cli.inspect.configuration_key') => $config['key'] ?? $this->translator->text('cli.inspect.owner_unknown'),
             $this->translator->text('cli.inspect.override') => null === $config['key'] ? $this->translator->text('cli.inspect.owner_unknown') : (null === $config['source'] ? $this->translator->text('cli.inspect.none_override') : $this->translator->text('cli.inspect.configured_key', ['key' => $config['source']])),
-            $this->translator->text('cli.inspect.enabled') => self::boolean($module['enabled']), $this->translator->text('cli.inspect.active') => self::boolean($view['active']),
-            $this->translator->text('cli.inspect.state') => $view['state'], $this->translator->text('cli.inspect.global_active') => self::boolean($module['active']),
+            $this->translator->text('cli.inspect.enabled') => $this->boolean($module['enabled']), $this->translator->text('cli.inspect.active') => $this->boolean($view['active']),
+            $this->translator->text('cli.inspect.state') => $this->translator->text('cli.label.'.$view['state']), $this->translator->text('cli.inspect.global_active') => $this->boolean($module['active']),
             $this->translator->text('cli.inspect.activation_reasons') => [] === ($module['activation_reasons'] ?? []) ? $this->translator->text('cli.inspect.none_recorded') : implode(', ', $module['activation_reasons']),
         ] as $label => $value) {
             $style->text($label.': '.$value);
         }
         if (null !== $config['enabled_override']) {
-            $style->text($this->translator->text('cli.inspect.enabled_override', ['value' => self::boolean($config['enabled_override'])]));
+            $style->text($this->translator->text('cli.inspect.enabled_override', ['value' => $this->boolean($config['enabled_override'])]));
         }
         if (null !== $view['owner']) {
             $style->text($this->translator->text('cli.inspect.owner_class', ['class' => $view['owner']['class']]));
@@ -167,7 +167,7 @@ final class InspectModuleCommand extends Command
             $style->text($this->translator->text('cli.inspect.project_class', ['class' => $view['project']['class']]));
         }
         foreach ($view['project_states'] as $state) {
-            $style->text($this->translator->text('cli.inspect.project_state', ['id' => $state['id'], 'state' => $state['state'], 'class' => $state['class']]));
+            $style->text($this->translator->text('cli.inspect.project_state', ['id' => $state['id'], 'state' => $this->translator->text('cli.label.'.$state['state']), 'class' => $state['class']]));
         }
         $this->section($style, $this->translator->text('cli.inspect.declared'), $module['declared_dependencies'], $this->translator->text('cli.inspect.none'));
         $this->section($style, $this->translator->text('cli.inspect.observed'), $module['observed_dependencies'], $this->translator->text('cli.inspect.none_verified'));
@@ -180,11 +180,11 @@ final class InspectModuleCommand extends Command
             $reference = $incoming['reference'];
             $style->text($incoming['source'].' → '.$this->translator->text('cli.inspect.reference_at', ['class' => $reference['class'], 'file' => $reference['file'], 'line' => $reference['line']]), '    ');
         }
-        $this->originals($style, array_values(array_merge($view['findings'], $view['blockers'])));
+        $this->originals($style, array_values(array_merge($view['findings'], $view['blockers'])), $report);
     }
 
     /** @param list<array<string, mixed>> $findings */
-    private function originals(ConsoleStyle $style, array $findings): void
+    private function originals(ConsoleStyle $style, array $findings, ArchitectureReport $report): void
     {
         $style->rule();
         $style->text($this->translator->text('cli.inspect.originals'), style: 'options=bold');
@@ -192,8 +192,8 @@ final class InspectModuleCommand extends Command
             $style->text($this->translator->text('cli.inspect.no_originals'));
         }
         foreach ($findings as $finding) {
-            $style->text('['.$finding['rule'].'] '.$finding['severity'].': '.$finding['message']);
-            $style->text($this->translator->text('cli.inspect.context', ['context' => (string) json_encode($finding['context'], \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR)]));
+            $style->text('['.$finding['rule'].'] '.$this->translator->text('cli.label.'.$finding['severity']).': '.$report->findingMessage($finding));
+            $style->text($this->translator->text('cli.inspect.context', ['context' => (string) json_encode($report->findingContext($finding), \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR)]));
         }
     }
 
@@ -227,8 +227,8 @@ final class InspectModuleCommand extends Command
         }
     }
 
-    private static function boolean(?bool $value): string
+    private function boolean(?bool $value): string
     {
-        return null === $value ? 'unknown' : ($value ? 'true' : 'false');
+        return $this->translator->text(null === $value ? 'cli.label.unknown' : ($value ? 'cli.label.true' : 'cli.label.false'));
     }
 }

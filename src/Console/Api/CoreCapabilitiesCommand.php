@@ -18,14 +18,19 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'sillbeam:api:capabilities', description: 'Report the supported Core Data profiles and operations.')]
 final class CoreCapabilitiesCommand extends Command
 {
-    public function __construct(private readonly CoreCapabilitiesProviderInterface $provider = new CoreCapabilitiesProvider())
-    {
+    /** @param (\Closure(?string): CoreTranslator)|null $errorTranslator */
+    public function __construct(
+        private readonly CoreCapabilitiesProviderInterface $provider = new CoreCapabilitiesProvider(),
+        private readonly CoreTranslator $translator = new CoreTranslator(),
+        private readonly ?\Closure $errorTranslator = null,
+    ) {
         parent::__construct();
+        $this->setDescription($translator->text('cli.command.'.(string) $this->getName()));
     }
 
     protected function configure(): void
     {
-        $this->addOption('format', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.capabilities_format'), 'json');
+        $this->addOption('format', null, InputOption::VALUE_REQUIRED, $this->translator->text('cli.api.capabilities_format'), 'json');
     }
 
     public function run(InputInterface $input, OutputInterface $output): int
@@ -33,7 +38,7 @@ final class CoreCapabilitiesCommand extends Command
         try {
             return parent::run($input, $output);
         } catch (\Throwable $error) {
-            return CoreDataCommand::failure($error, $output);
+            return CoreDataCommand::failure($error, $output, $this->errorTranslator?->__invoke(null) ?? $this->translator);
         }
     }
 

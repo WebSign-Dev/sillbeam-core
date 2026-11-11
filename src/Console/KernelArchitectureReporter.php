@@ -9,6 +9,7 @@ use Sillbeam\Core\Architecture\ArchitectureAnalyzer;
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\DiscoveryOptionsResolver;
 use Sillbeam\Core\DependencyInjection\SillbeamCoreExtension;
+use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
 use Symfony\Component\HttpKernel\KernelInterface;
@@ -27,11 +28,11 @@ final class KernelArchitectureReporter
      *
      * @throws \LogicException if kernel preparation, bundle registration or configuration is incompatible
      */
-    public function report(KernelInterface $kernel): ArchitectureReport
+    public function report(KernelInterface $kernel, CoreTranslator $translator = new CoreTranslator()): ArchitectureReport
     {
         $input = $this->configuration($kernel);
 
-        return ArchitectureReport::fromAnalysis((new ArchitectureAnalyzer())->analyze($input->options, $input->config), $input->config, $input->projectDir);
+        return ArchitectureReport::fromLocalizedAnalysis((new ArchitectureAnalyzer())->analyze($input->options, $input->config), $input->config, $input->projectDir, $translator);
     }
 
     public function configuration(KernelInterface $kernel): CoreDataConfiguration

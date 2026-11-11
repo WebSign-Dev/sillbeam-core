@@ -6,6 +6,7 @@ namespace Sillbeam\Core\Architecture\Console;
 
 use Sillbeam\Core\Architecture\ArchitectureAnalysisResult;
 use Sillbeam\Core\Architecture\ArchitectureFinding;
+use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\Diagnostic\DiagnosticCollection;
 use Sillbeam\Core\Architecture\Diagnostic\DiagnosticContext;
 use Sillbeam\Core\I18n\CoreTranslator;
@@ -39,7 +40,7 @@ final class ArchitecturePresentation
             }
         }
         $readable = static fn (string $text): string => strtr(self::friendly($text, $labels), $paths);
-        $issues = [];
+        $issues = $messages = $hints = [];
         foreach ($collection->diagnoses as $diagnosis) {
             $first = $diagnosis->findings[0];
             $rule = $first->rule;
@@ -68,10 +69,18 @@ final class ArchitecturePresentation
                     $reference = ['file' => $file, 'line' => \is_int($line) ? $line : null, 'readable' => $location];
                     $references[serialize([$file, $line])] = $reference;
                 }
+                $original = get_object_vars($finding);
+                $message = $finding->localizedMessage($translator);
+                $key = ArchitectureReport::findingKey($original);
+                $messages[$key] = $message;
+                if (null !== ($hint = $finding->suggestion($translator))) {
+                    $hints[$key] = $hint;
+                }
                 $originals[] = [
-                    'finding' => get_object_vars($finding),
-                    'readable' => $readable($finding->localizedMessage($translator)).(\is_string($file) ? $translator->text('diagnosis.context.at', ['location' => self::relative($file, $root, $context).(\is_int($line) ? ':'.$line : '')]) : ''),
-                    'technical' => '['.$finding->rule.'] '.$finding->severity.': '.$finding->message.' Context: '.json_encode($finding->context, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE),
+                    'finding' => $original,
+                    'message' => $message,
+                    'readable' => $readable($message).(\is_string($file) ? $translator->text('diagnosis.context.at', ['location' => self::relative($file, $root, $context).(\is_int($line) ? ':'.$line : '')]) : ''),
+                    'technical' => '['.$finding->rule.'] '.$translator->text('cli.label.'.$finding->severity).': '.$message.' '.$translator->text('architecture.cli.technical_context').' '.json_encode($finding->context, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE),
                 ];
             }
             foreach ($diagnosis->descriptors as $file) {
@@ -116,7 +125,7 @@ final class ArchitecturePresentation
 
         return [
             'modules' => \count($context->modules), 'projects' => \count($context->projects),
-            'findings' => $collection->findingCount(), 'issues' => $issues, 'couplings' => $couplings,
+            'findings' => $collection->findingCount(), 'issues' => $issues, 'couplings' => $couplings, 'finding_messages' => $messages, 'finding_hints' => $hints,
             'status' => !$analysis->isComplete() ? 'unavailable' : ($analysis->isValid() ? 'valid' : 'violations'),
         ];
     }
@@ -126,14 +135,14 @@ final class ArchitecturePresentation
      *
      * @return array<string, mixed>
      */
-    public static function fromData(array $data): array
+    public static function fromData(array $data, CoreTranslator $translator = new CoreTranslator()): array
     {
         $findings = [];
         foreach ($data['findings'] as $finding) {
             $context = $finding['context'];
             $findings[] = new ArchitectureFinding($finding['rule'], $finding['message'], $context, $finding['severity']);
         }
-        $view = self::fromAnalysis(new ArchitectureAnalysisResult($findings));
+        $view = self::fromAnalysis(new ArchitectureAnalysisResult($findings), translator: $translator);
         $view['modules'] = \count($data['modules']);
         $view['projects'] = \count($data['projects']);
         $view['status'] = $data['status'];
@@ -143,7 +152,7 @@ final class ArchitecturePresentation
                 $targets[$reference['class']][] = $reference;
             }
             foreach ($targets as $class => $references) {
-                $view['couplings'][] = ['source' => $module['class'], 'relation' => $module['id'].' → '.$class, 'summary' => $module['id'].' references application code outside its module.', 'references' => $references];
+                $view['couplings'][] = ['source' => $module['class'], 'relation' => $module['id'].' → '.$class, 'summary' => $translator->text('diagnosis.application_reference', ['module' => $module['id']]), 'references' => $references];
             }
         }
 

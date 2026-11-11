@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Architecture\Console;
 
 use Sillbeam\Core\Architecture\ArchitectureReport;
+use Sillbeam\Core\Console\Style\LocalizedCommand;
 use Sillbeam\Core\I18n\CoreError;
 use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
@@ -16,12 +16,12 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /** @internal SVG or raw Mermaid export of existing report evidence, without container boot. */
 #[AsCommand(name: 'sillbeam:graph', description: 'Render module architecture as SVG or export raw Mermaid source.')]
-final class GraphCommand extends Command
+final class GraphCommand extends LocalizedCommand
 {
-    /** @param ArchitectureReport|\Closure(): ArchitectureReport $report */
-    public function __construct(private readonly ArchitectureReport|\Closure $report, private readonly CoreTranslator $translator = new CoreTranslator())
+    /** @param ArchitectureReport|\Closure(CoreTranslator): ArchitectureReport $report */
+    public function __construct(private readonly ArchitectureReport|\Closure $report, CoreTranslator $translator = new CoreTranslator())
     {
-        parent::__construct();
+        parent::__construct($translator);
     }
 
     protected function configure(): void
@@ -38,7 +38,7 @@ final class GraphCommand extends Command
     {
         try {
             return parent::run($input, $output);
-        } catch (\Symfony\Component\Console\Exception\ExceptionInterface $error) {
+        } catch (\Symfony\Component\Console\Exception\ExceptionInterface|\InvalidArgumentException $error) {
             return self::usageError($error, $output, $this->translator);
         }
     }
@@ -68,7 +68,7 @@ final class GraphCommand extends Command
         if ('mermaid' === $format && (null !== $input->getOption('output') || $force)) {
             return self::usageError(CoreError::create(\InvalidArgumentException::class, 'cli.graph.mermaid_options'), $output, $this->translator);
         }
-        $report = ArchitectureReport::collect($this->report);
+        $report = ArchitectureReport::collectLocalized($this->report, $this->translator);
         try {
             $view = GraphView::fromReport($report, $input->getOption('module'), $input->getOption('project'), $this->translator);
         } catch (\InvalidArgumentException $error) {

@@ -48,17 +48,34 @@ The existing bootstrap selects the kernel, environment and debug mode as usual, 
 
 ## Locale configuration
 
-The Core locale resolver accepts an explicit locale, then checks the personal
-preference and the project's Symfony configuration. It defaults to English.
-Supported values are `en` and `de`.
+Core uses English (`en`) by default and also supports German (`de`). The
+effective language for human-facing commands is resolved in this order.
+
+1. An explicit `--locale=en` or `--locale=de`.
+2. The current user's saved preference.
+3. The project's `sillbeam.locale` setting.
+4. English.
+
+Set the project default in your existing Symfony configuration.
 
 ```yaml
 sillbeam:
     locale: de
 ```
 
-The personal preference lives in a file named `sillbeam/locale` under the user
-configuration directory.
+Use the Core console adapter to manage your personal preference before container
+boot, or to override the language for one command or its help.
+
+```bash
+php bin/console sillbeam:locale
+php bin/console sillbeam:locale --set=de
+php bin/console sillbeam:locale --reset
+php bin/console sillbeam:architecture --locale=de
+php bin/console sillbeam:make:module --help --locale=de
+```
+
+The personal preference lives in `sillbeam/locale` under the user configuration
+directory and applies across projects.
 
 | Platform | User configuration directory |
 | --- | --- |
@@ -66,14 +83,23 @@ configuration directory.
 | macOS | `$HOME/Library/Application Support` |
 | Windows | `%APPDATA%` or `%LOCALAPPDATA%` |
 
-A missing preference lets the resolver use the project default. A corrupt or
-unreadable preference reports the file path when the resolver needs it. A
-supported explicit locale takes precedence even in that case. Setting or
-resetting the preference requires an explicit call to the store. The locale
-command and wiring for human-facing CLI commands are outside this change.
+An unsupported explicit locale is a usage error. A corrupt or unreadable
+preference reports its file path when read. `--set` and `--reset` can repair
+the preference. The resolver uses English for preboot diagnostics when project
+configuration cannot be read and no higher-priority locale is available.
+Before boot, Doctor reads literal locale declarations from conventional Symfony
+YAML files. This preserves its static inspection of projects with dynamic
+configuration.
 
-Core Data keeps its own locale selection. Live defaults to English and accepts
-an explicit supported locale. Analysis includes both languages.
+Architecture and Doctor JSON v1 keep their existing status values, fields and
+English messages. Human-facing text, Markdown and visible graph labels use the
+effective CLI locale. The graph syntax and descriptor identities stay stable.
+
+`sillbeam:api --locale` selects the Live API document language and keeps its
+existing contract. Live defaults to English independently of CLI preferences.
+Analysis includes both languages and rejects a locale selection. The
+capabilities and source-inventory JSON are locale-independent. The CLI preference
+can still localize the help and human-readable errors of the JSON commands.
 
 ## Output and exit codes
 

@@ -12,6 +12,12 @@ final readonly class LocaleResolver
     {
     }
 
+    /** @internal Factory for the project locale resolved during container compilation. */
+    public static function forProject(UserLocaleStore $store, string $locale): self
+    {
+        return new self($store, static fn (): string => $locale);
+    }
+
     public function resolve(?string $explicit = null): string
     {
         $locale = $explicit ?? $this->userLocale->read() ?? $this->projectLocale?->__invoke() ?? CoreTranslator::DEFAULT_LOCALE;

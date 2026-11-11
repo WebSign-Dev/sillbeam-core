@@ -8,6 +8,7 @@ use Composer\InstalledVersions;
 use Sillbeam\Core\Kernel\SillbeamKernel;
 use Sillbeam\Core\Module\ModuleRegistryInterface;
 use Symfony\Component\HttpKernel\Kernel;
+use Symfony\Component\HttpKernel\KernelInterface;
 
 /**
  * Collects current kernel, Composer version and compiled module counts for the about command.
@@ -17,8 +18,8 @@ use Symfony\Component\HttpKernel\Kernel;
 final readonly class KernelInformation implements KernelInformationInterface
 {
     public function __construct(
-        private Kernel $kernel,
-        private ModuleRegistryInterface $modules,
+        private KernelInterface $kernel,
+        private ?ModuleRegistryInterface $modules,
     ) {
     }
 
@@ -35,8 +36,7 @@ final readonly class KernelInformation implements KernelInformationInterface
             'sillbeam' => InstalledVersions::isInstalled('websign-dev/sillbeam-core')
                 ? (InstalledVersions::getPrettyVersion('websign-dev/sillbeam-core') ?? 'unknown')
                 : 'source',
-            'modules' => \count($this->modules->all()),
-            'modules_enabled' => \count($this->modules->active()),
+            ...(null === $this->modules ? [] : ['modules' => \count($this->modules->all()), 'modules_enabled' => \count($this->modules->active())]),
         ];
     }
 }

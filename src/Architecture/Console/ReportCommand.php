@@ -8,9 +8,10 @@ use Composer\InstalledVersions;
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\FilesystemPath;
 use Sillbeam\Core\Console\Style\ConsoleStyle;
+use Sillbeam\Core\Console\Style\LocalizedCommand;
+use Sillbeam\Core\I18n\CoreError;
 use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -21,12 +22,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  * @internal
  */
 #[AsCommand(name: 'sillbeam:report', description: 'Write a standalone Markdown architecture report.')]
-final class ReportCommand extends Command
+final class ReportCommand extends LocalizedCommand
 {
-    /** @param ArchitectureReport|\Closure(): ArchitectureReport $report */
-    public function __construct(private readonly ArchitectureReport|\Closure $report, private readonly string $projectDir, private readonly CoreTranslator $translator = new CoreTranslator())
+    /** @param ArchitectureReport|\Closure(CoreTranslator): ArchitectureReport $report */
+    public function __construct(private readonly ArchitectureReport|\Closure $report, private readonly string $projectDir, CoreTranslator $translator = new CoreTranslator())
     {
-        parent::__construct();
+        parent::__construct($translator);
     }
 
     protected function configure(): void
@@ -39,7 +40,7 @@ final class ReportCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new ConsoleStyle($output);
-        $report = ArchitectureReport::collect($this->report);
+        $report = ArchitectureReport::collectLocalized($this->report, $this->translator);
         $temporary = null;
         try {
             $path = $input->getOption('output');
@@ -66,11 +67,11 @@ final class ReportCommand extends Command
             if (!@rename($temporary, $path)) {
                 throw new \RuntimeException($this->translator->text('cli.report.replace', ['path' => $path]));
             }
-            $io->success($this->translator->text('cli.report.written', ['path' => $path, 'status' => $report->data['status']]));
+            $io->success($this->translator->text('cli.report.written', ['path' => $path, 'status' => $this->translator->text('cli.label.'.$report->data['status'])]));
 
             return $report->exitCode();
         } catch (\Throwable $error) {
-            $io->error($this->translator->text('cli.report.failure', ['error' => $error->getMessage()]));
+            $io->error($this->translator->text('cli.report.failure', ['error' => CoreError::render($error, $this->translator)]));
 
             return 2;
         } finally {

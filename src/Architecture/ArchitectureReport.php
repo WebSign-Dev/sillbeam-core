@@ -8,6 +8,7 @@ use Sillbeam\Core\Architecture\Console\ArchitecturePresentation;
 use Sillbeam\Core\Architecture\Console\ModuleInspection;
 use Sillbeam\Core\I18n\CoreError;
 use Sillbeam\Core\I18n\CoreMessage;
+use Sillbeam\Core\I18n\CoreTranslator;
 
 /**
  * Scalar architecture report shared by text, JSON and Markdown command output.
@@ -39,7 +40,26 @@ final readonly class ArchitectureReport
      */
     public static function fromAnalysis(ArchitectureAnalysisResult $analysis, array $config = [], ?string $projectDir = null): self
     {
+        return self::fromLocalizedAnalysis($analysis, $config, $projectDir, new CoreTranslator());
+    }
+
+    /**
+     * @internal the translator only affects presentation, never schema data
+     *
+     * @param array<string, mixed> $config
+     */
+    public static function fromLocalizedAnalysis(ArchitectureAnalysisResult $analysis, array $config, ?string $projectDir, CoreTranslator $translator, bool $compiled = false): self
+    {
         $catalog = self::catalog($analysis, $config);
+        $presentation = ArchitecturePresentation::fromAnalysis($analysis, $projectDir, $translator)
+            + ['module_inspection' => ModuleInspection::metadata($analysis, $config)];
+        if ($compiled && ([] !== $analysis->findings || [] !== $analysis->applicationReferences)) {
+            foreach (CoreTranslator::locales() as $locale) {
+                if ($locale !== $translator->locale) {
+                    $presentation['locales'][$locale] = ArchitecturePresentation::fromAnalysis($analysis, $projectDir, new CoreTranslator($locale));
+                }
+            }
+        }
 
         return new self([
             'schema_version' => 1,
@@ -54,7 +74,7 @@ final readonly class ArchitectureReport
                 return $data;
             }, $analysis->findings),
             ...$catalog,
-        ], ArchitecturePresentation::fromAnalysis($analysis, $projectDir) + ['module_inspection' => ModuleInspection::metadata($analysis, $config)]);
+        ], $presentation);
     }
 
     /**
@@ -117,9 +137,14 @@ final readonly class ArchitectureReport
      */
     public static function unavailable(\Throwable $error): self
     {
-        return self::fromAnalysis(new ArchitectureAnalysisResult([
+        return self::unavailableForLocale($error, new CoreTranslator());
+    }
+
+    private static function unavailableForLocale(\Throwable $error, CoreTranslator $translator): self
+    {
+        return self::fromLocalizedAnalysis(new ArchitectureAnalysisResult([
             ArchitectureFinding::fromMessage('report.execution', new CoreMessage('finding.report.execution', ['error' => CoreError::message($error)]), ['exception' => $error::class], 'fatal'),
-        ]));
+        ]), [], null, $translator);
     }
 
     /**
@@ -132,6 +157,12 @@ final readonly class ArchitectureReport
      * @param self|\Closure(): self $provider an existing report or a closure evaluated once inside the guarded output/error scope
      */
     public static function collect(self|\Closure $provider): self
+    {
+        return self::collectReport($provider, new CoreTranslator());
+    }
+
+    /** @param self|\Closure(): self $provider */
+    private static function collectReport(self|\Closure $provider, CoreTranslator $translator): self
     {
         $level = ob_get_level();
         ob_start();
@@ -147,13 +178,66 @@ final readonly class ArchitectureReport
         try {
             return $provider instanceof \Closure ? $provider() : $provider;
         } catch (\Throwable $error) {
-            return self::unavailable($error);
+            return self::unavailableForLocale($error, $translator);
         } finally {
             restore_error_handler();
             while (ob_get_level() > $level) {
                 ob_end_clean();
             }
         }
+    }
+
+    /** @internal
+     * @param self|\Closure(CoreTranslator): self $provider
+     */
+    public static function collectLocalized(self|\Closure $provider, CoreTranslator $translator): self
+    {
+        $report = self::collectReport($provider instanceof \Closure ? static fn (): self => $provider($translator) : $provider, $translator);
+        $presentation = $report->presentation['locales'][$translator->locale] ?? null;
+
+        return null === $presentation ? $report : new self($report->data, $presentation + $report->presentation);
+    }
+
+    /**
+     * @internal returns localized prose without changing the original finding data
+     *
+     * @param array<string, mixed> $finding
+     */
+    public function findingMessage(array $finding): string
+    {
+        return $this->presentation['finding_messages'][self::findingKey($finding)] ?? $finding['message'];
+    }
+
+    /**
+     * @internal localizes only the human remediation hint in finding context
+     *
+     * @param array<string, mixed> $finding
+     *
+     * @return array<string, mixed>
+     */
+    public function findingContext(array $finding): array
+    {
+        $context = $finding['context'];
+        $hint = $this->presentation['finding_hints'][self::findingKey($finding)] ?? null;
+        if (null !== $hint && isset($context['suggestion'])) {
+            $context['suggestion'] = $hint;
+        }
+
+        return $context;
+    }
+
+    /**
+     * @internal
+     *
+     * @param array<string, mixed> $finding
+     */
+    public static function findingKey(array $finding): string
+    {
+        $context = $finding['context'] ?? [];
+        unset($context['suggestion']);
+        ksort($context);
+
+        return hash('sha256', serialize([$finding['rule'], $finding['message'], $finding['severity'] ?? null, $context]));
     }
 
     /**

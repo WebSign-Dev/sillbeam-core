@@ -18,14 +18,19 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'sillbeam:inspect:sources', description: 'Export the source inventory as JSON.')]
 final class InspectSourcesCommand extends Command
 {
-    public function __construct(private readonly CoreDataProvider $provider)
-    {
+    /** @param (\Closure(?string): CoreTranslator)|null $errorTranslator */
+    public function __construct(
+        private readonly CoreDataProvider $provider,
+        private readonly CoreTranslator $translator = new CoreTranslator(),
+        private readonly ?\Closure $errorTranslator = null,
+    ) {
         parent::__construct();
+        $this->setDescription($translator->text('cli.command.'.(string) $this->getName()));
     }
 
     protected function configure(): void
     {
-        $this->addOption('format', null, InputOption::VALUE_REQUIRED, (new CoreTranslator())->text('cli.api.inventory_format'), 'json');
+        $this->addOption('format', null, InputOption::VALUE_REQUIRED, $this->translator->text('cli.api.inventory_format'), 'json');
     }
 
     public function run(InputInterface $input, OutputInterface $output): int
@@ -33,7 +38,7 @@ final class InspectSourcesCommand extends Command
         try {
             return parent::run($input, $output);
         } catch (\Throwable $error) {
-            return CoreDataCommand::failure($error, $output);
+            return CoreDataCommand::failure($error, $output, $this->errorTranslator?->__invoke(null) ?? $this->translator);
         }
     }
 
@@ -54,7 +59,7 @@ final class InspectSourcesCommand extends Command
         }
         $output->writeln($json, OutputInterface::OUTPUT_RAW | OutputInterface::VERBOSITY_QUIET);
         if ($output instanceof ConsoleOutputInterface) {
-            $translator = new CoreTranslator();
+            $translator = [] === $inventory['errors'] ? $this->translator : ($this->errorTranslator?->__invoke(null) ?? $this->translator);
             foreach ($inventory['errors'] as $error) {
                 $output->getErrorOutput()->writeln(
                     $translator->text('api.'.$error['code']).(null === $error['path'] ? '' : ' '.$error['path']),

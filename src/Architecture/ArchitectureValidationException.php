@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Architecture;
 
 use Sillbeam\Core\I18n\CoreMessage;
+use Sillbeam\Core\I18n\CoreTranslator;
 
 /**
  * Strict validation failure carrying all available findings and the original fatal cause.
@@ -27,6 +28,15 @@ final class ArchitectureValidationException extends \LogicException
             static fn (ArchitectureFinding $finding): string => $finding->describe(),
             $result->findings,
         )), 0, $previous);
+    }
+
+    /** @internal */
+    public function localizedMessage(CoreTranslator $translator): string
+    {
+        return implode("\n", array_map(
+            static fn (ArchitectureFinding $finding): string => $finding->describeLocalized($translator),
+            $this->result->findings,
+        ));
     }
 
     /**

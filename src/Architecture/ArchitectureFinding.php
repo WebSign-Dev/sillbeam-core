@@ -95,18 +95,24 @@ final readonly class ArchitectureFinding
      */
     public function describe(): string
     {
+        return $this->describeLocalized(new CoreTranslator());
+    }
+
+    /** @internal */
+    public function describeLocalized(CoreTranslator $translator): string
+    {
         $context = [];
         foreach (['module', 'project', 'file', 'line'] as $key) {
             if (isset($this->context[$key])) {
                 $context[] = $key.'='.$this->context[$key];
             }
         }
-        $description = '['.$this->rule.'] '.$this->message;
+        $description = '['.$this->rule.'] '.$this->localizedMessage($translator);
         if ([] !== $context) {
             $description .= ' ('.implode(', ', $context).')';
         }
-        if (null !== ($suggestion = $this->suggestion())) {
-            $description .= "\nHint: ".$suggestion;
+        if (null !== ($suggestion = $this->suggestion($translator))) {
+            $description .= "\n".$translator->text('cli.finding.hint').' '.$suggestion;
         }
 
         return $description;

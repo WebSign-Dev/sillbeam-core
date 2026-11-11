@@ -17,8 +17,8 @@ final readonly class ReportRenderer
     public function markdown(string $version, \DateTimeImmutable $checkedAt, bool $includeCouplings = false): string
     {
         $data = $this->report->data;
-        $view = [] === $this->report->presentation ? ArchitecturePresentation::fromData($data) : $this->report->presentation;
-        $catalog = new MarkdownCatalog($data);
+        $view = [] === $this->report->presentation ? ArchitecturePresentation::fromData($data, $this->translator) : $this->report->presentation;
+        $catalog = new MarkdownCatalog($data, $this->translator);
         usort($data['modules'], static fn (array $a, array $b): int => strcmp($catalog->modules[$a['class']], $catalog->modules[$b['class']]));
         usort($data['projects'], static fn (array $a, array $b): int => strcmp($catalog->projects[$a['class']], $catalog->projects[$b['class']]));
         $errors = \count(array_filter($data['findings'], static fn (array $finding): bool => 'error' === $finding['severity']));
@@ -26,7 +26,7 @@ final readonly class ReportRenderer
             $this->translator->text('report.markdown.title'), '',
             $this->translator->text('report.markdown.version', ['version' => self::escape($version)]), '',
             $this->translator->text('report.markdown.date', ['date' => $checkedAt->setTimezone(new \DateTimeZone('UTC'))->format(\DateTimeInterface::ATOM)]), '',
-            $this->translator->text('report.markdown.status', ['status' => self::escape($data['status'])]), '',
+            $this->translator->text('report.markdown.status', ['status' => $this->translator->text('cli.label.'.$data['status'])]), '',
             $this->translator->text('report.markdown.complete', ['complete' => $this->translator->text($data['complete'] ? 'report.markdown.yes' : 'report.markdown.no')]), '',
             $this->translator->text('report.markdown.summary'), '',
             $this->translator->text('report.markdown.counts', ['findings' => \count($data['findings']), 'diagnoses' => \count($view['issues'])]), '',
@@ -56,7 +56,7 @@ final readonly class ReportRenderer
             $lines[] = '';
         }
         foreach ($view['issues'] as $index => $issue) {
-            $lines = [...$lines, '### '.($index + 1).'. '.self::escape($issue['title']), '', self::escape(self::relation($issue, $catalog)), '', $this->translator->text('report.markdown.problem'), '', self::escape(self::description($issue, $issue['original_problem'] ?? $issue['problem'], $catalog)), ''];
+            $lines = [...$lines, '### '.($index + 1).'. '.self::escape($issue['title']), '', self::escape($this->relation($issue, $catalog)), '', $this->translator->text('report.markdown.problem'), '', self::escape(self::description($issue, $issue['original_problem'] ?? $issue['problem'], $catalog)), ''];
             $lines[] = $this->translator->text('report.markdown.impact');
             $lines[] = '';
             $lines[] = self::escape(self::description($issue, $issue['original_impact'] ?? $issue['impact'], $catalog));
@@ -84,9 +84,9 @@ final readonly class ReportRenderer
             $lines[] = '';
             foreach ($issue['originals'] as $number => $original) {
                 $finding = $original['finding'];
-                $lines[] = $this->translator->text('report.markdown.original', ['index' => $number + 1, 'rule' => self::escape($finding['rule']), 'severity' => self::escape($finding['severity'])]);
+                $lines[] = $this->translator->text('report.markdown.original', ['index' => $number + 1, 'rule' => self::escape($finding['rule']), 'severity' => $this->translator->text('cli.label.'.$finding['severity'])]);
                 $lines[] = '';
-                $lines[] = self::escape($finding['message']);
+                $lines[] = self::escape($original['message'] ?? $finding['message']);
                 $lines[] = '';
                 foreach ($finding['context'] as $key => $value) {
                     $lines[] = '- '.self::escape((string) $key).': '.self::escape(null === $value ? 'null' : (string) $value);
@@ -134,7 +134,7 @@ final readonly class ReportRenderer
     }
 
     /** @param array<string, mixed> $issue */
-    private static function relation(array $issue, MarkdownCatalog $catalog): string
+    private function relation(array $issue, MarkdownCatalog $catalog): string
     {
         $label = static fn (string $class): string => $catalog->modules[$class] ?? $catalog->projects[$class] ?? $catalog->classes[$class] ?? $class;
         if ([] !== ($issue['relation_modules'] ?? [])) {
@@ -144,7 +144,7 @@ final readonly class ReportRenderer
         $source = $context['module'] ?? $context['project'] ?? null;
         $target = $context['target'] ?? $context['class'] ?? null;
         if (\is_string($source) || \is_string($target)) {
-            return (\is_string($source) ? $label($source) : 'Application').(\is_string($target) ? ' → '.$label($target) : '');
+            return (\is_string($source) ? $label($source) : $this->translator->text('diagnosis.heading.application')).(\is_string($target) ? ' → '.$label($target) : '');
         }
 
         return $catalog->prose($issue['relation']);
@@ -172,7 +172,7 @@ final readonly class ReportRenderer
                     $details[] = '';
                 }
                 $scope = 'private' === $module['scope'] ? $this->translator->text('report.markdown.private') : $this->translator->text('report.markdown.shared');
-                $state = !$data['valid'] || !$data['complete'] ? $this->translator->text('report.markdown.unknown') : (true === ($module['active'] ?? null) ? $this->translator->text('report.markdown.active') : (false === ($module['active'] ?? null) && \in_array($module['inactive_reason'] ?? null, ['disabled', 'unassigned'], true) ? ucfirst($module['inactive_reason']) : $this->translator->text('report.markdown.unknown')));
+                $state = !$data['valid'] || !$data['complete'] ? $this->translator->text('report.markdown.unknown') : (true === ($module['active'] ?? null) ? $this->translator->text('report.markdown.active') : (false === ($module['active'] ?? null) && \in_array($module['inactive_reason'] ?? null, ['disabled', 'unassigned'], true) ? ucfirst($this->translator->text('cli.label.'.$module['inactive_reason'])) : $this->translator->text('report.markdown.unknown')));
                 if (mb_strlen($name) <= 48) {
                     $rows[] = '| '.self::escape($name).' | '.$scope.' | '.$state.' | '.self::escape($cell).' |';
                 } else {

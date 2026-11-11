@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Sillbeam\Core\Console\Doctor;
 
 use Sillbeam\Core\Console\Style\ConsoleStyle;
+use Sillbeam\Core\Console\Style\LocalizedCommand;
+use Sillbeam\Core\I18n\CoreError;
 use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -20,11 +21,11 @@ use Symfony\Component\HttpKernel\KernelInterface;
  * @internal
  */
 #[AsCommand(name: 'sillbeam:doctor', description: 'Check static Symfony installation evidence without changing files.')]
-final class DoctorCommand extends Command
+final class DoctorCommand extends LocalizedCommand
 {
-    public function __construct(private readonly string $projectDir, private readonly string $environment, private readonly ?KernelInterface $kernel = null, private readonly CoreTranslator $translator = new CoreTranslator())
+    public function __construct(private readonly string $projectDir, private readonly string $environment, private readonly ?KernelInterface $kernel = null, CoreTranslator $translator = new CoreTranslator())
     {
-        parent::__construct();
+        parent::__construct($translator);
     }
 
     protected function configure(): void
@@ -49,10 +50,10 @@ final class DoctorCommand extends Command
         }
         try {
             return parent::run($input, $output);
-        } catch (\Symfony\Component\Console\Exception\ExceptionInterface $error) {
-            return self::failure($error, 'doctor.usage', $json, $output);
+        } catch (\Symfony\Component\Console\Exception\ExceptionInterface|\InvalidArgumentException $error) {
+            return self::failure($error, 'doctor.usage', $json, $output, $this->translator);
         } catch (\Throwable $error) {
-            return self::failure($error, 'doctor.execution', $json, $output);
+            return self::failure($error, 'doctor.execution', $json, $output, $this->translator);
         } finally {
             if ($json) {
                 restore_error_handler();
@@ -94,14 +95,14 @@ final class DoctorCommand extends Command
     }
 
     /** @param 'doctor.usage'|'doctor.execution' $code */
-    public static function failure(\Throwable $error, string $code, bool $json, OutputInterface $output): int
+    public static function failure(\Throwable $error, string $code, bool $json, OutputInterface $output, CoreTranslator $translator = new CoreTranslator()): int
     {
         if ($json) {
             if (!$output->isQuiet()) {
                 $output->writeln(DoctorReport::failure($error, $code)->toJson(), OutputInterface::OUTPUT_RAW);
             }
         } else {
-            (new ConsoleStyle($output))->error($error->getMessage());
+            (new ConsoleStyle($output))->error(CoreError::render($error, $translator));
         }
 
         return 2;
@@ -111,7 +112,7 @@ final class DoctorCommand extends Command
     {
         $format = $input->getOption('format');
         if (!\in_array($format, ['text', 'json'], true)) {
-            return self::failure(new \InvalidArgumentException($this->translator->text('doctor.cli.invalid_format')), 'doctor.usage', false, $output);
+            return self::failure(new \InvalidArgumentException($this->translator->text('doctor.cli.invalid_format')), 'doctor.usage', false, $output, $this->translator);
         }
         $style = new ConsoleStyle($output);
         if ('text' === $format) {

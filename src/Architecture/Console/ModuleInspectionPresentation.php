@@ -62,7 +62,7 @@ final class ModuleInspectionPresentation
             }
         }
         foreach (array_keys($unresolved) as $class) {
-            $this->labels[$class] = self::suffix($class, array_keys($unresolved)).' [unresolved]';
+            $this->labels[$class] = self::suffix($class, array_keys($unresolved)).\sprintf(' [%s]', $this->translator->text('cli.label.unresolved'));
         }
         foreach ($catalog as $module) {
             foreach ($module['references'] as $reference) {
@@ -71,7 +71,7 @@ final class ModuleInspectionPresentation
         }
         foreach ($report->presentation['issues'] ?? [] as $issue) {
             foreach ($issue['originals'] ?? [] as $original) {
-                $key = self::findingKey($original['finding']);
+                $key = ArchitectureReport::findingKey($original['finding']);
                 $this->titles[$key] = $issue['title'];
                 if (\is_string($issue['caution'] ?? null)) {
                     $this->cautions[$key] = $issue['caution'];
@@ -155,9 +155,9 @@ final class ModuleInspectionPresentation
      */
     public function problem(array $finding): string
     {
-        $title = $this->titles[self::findingKey($finding)] ?? null;
+        $title = $this->titles[ArchitectureReport::findingKey($finding)] ?? null;
         if (null === $title || 'fatal' === $finding['severity']) {
-            return $this->readable($finding['message']);
+            return $this->readable($this->report->findingMessage($finding));
         }
         $context = $finding['context'];
         $source = $context['module'] ?? $context['project'] ?? null;
@@ -189,19 +189,9 @@ final class ModuleInspectionPresentation
      */
     public function caution(array $finding): ?string
     {
-        $text = $this->cautions[self::findingKey($finding)] ?? null;
+        $text = $this->cautions[ArchitectureReport::findingKey($finding)] ?? null;
 
         return null === $text ? null : $this->readable($text);
-    }
-
-    /** @param array<string, mixed> $finding */
-    private static function findingKey(array $finding): string
-    {
-        $context = $finding['context'];
-        unset($context['suggestion']);
-        ksort($context);
-
-        return serialize([$finding['rule'], $finding['message'], $finding['severity'], $context]);
     }
 
     /** @param array<string, mixed> $finding */

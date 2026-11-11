@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture\Console;
 
+use Sillbeam\Core\I18n\CoreTranslator;
+
 /** @internal Markdown-only identity labels; never used as PHP class references. */
 final readonly class MarkdownCatalog
 {
@@ -17,7 +19,7 @@ final readonly class MarkdownCatalog
     public array $classes;
 
     /** @param array<string, mixed> $data */
-    public function __construct(array $data)
+    public function __construct(array $data, CoreTranslator $translator = new CoreTranslator())
     {
         $projects = $projectIds = [];
         foreach ($data['projects'] as $project) {
@@ -26,7 +28,7 @@ final readonly class MarkdownCatalog
         }
         foreach ($data['modules'] as $module) {
             if (null !== ($owner = $module['project'] ?? null) && !isset($projects[$owner])) {
-                $projects[$owner] = self::name($owner, 'Project').' (unresolved)';
+                $projects[$owner] = self::name($owner, 'Project').' ('.$translator->text('cli.label.unresolved').')';
                 $projectIds[$owner] = 'unresolved';
             }
         }
@@ -52,7 +54,7 @@ final readonly class MarkdownCatalog
         }
         sort($unresolved, \SORT_STRING);
         foreach ($unresolved as $index => $target) {
-            $modules[$target] = self::name($target, 'Module').' (unresolved)';
+            $modules[$target] = self::name($target, 'Module').' ('.$translator->text('cli.label.unresolved').')';
             $moduleIds[$target] = 'unresolved:'.($index + 1);
         }
         $this->modules = self::unique($modules, $moduleIds);
@@ -67,7 +69,7 @@ final readonly class MarkdownCatalog
         $architectureLabels = array_fill_keys([...array_values($this->modules), ...array_values($this->projects)], true);
         foreach ($classes as $class => $name) {
             if (isset($architectureLabels[$name])) {
-                $classes[$class] .= ' (class)';
+                $classes[$class] .= ' ('.$translator->text('cli.label.class').')';
             }
         }
         ksort($classes, \SORT_STRING);
