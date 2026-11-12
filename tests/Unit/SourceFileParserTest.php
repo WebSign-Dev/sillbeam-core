@@ -4,12 +4,48 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Tests\Unit;
 
+use PhpParser\Error;
 use PHPUnit\Framework\TestCase;
 use Sillbeam\Core\Architecture\SourceFileParser;
 use Sillbeam\Core\Tests\Support\SourceWorkspace;
 
 final class SourceFileParserTest extends TestCase
 {
+    public function testParserReadsChangedSourceAcrossSuccessfulAndFailedParses(): void
+    {
+        $source = new SourceWorkspace();
+        $parser = new SourceFileParser();
+        $relative = 'src/Example.php';
+        $path = $source->directory.'/'.$relative;
+        try {
+            $source->write($relative, "<?php\nnamespace Before;\nuse External\\First as Port;\nfinal class Example extends Port {}");
+            $first = $parser->parse($path);
+            self::assertSame(['Before\\Example'], $first->classes);
+            self::assertSame([['class' => 'External\\First', 'line' => 4]], $first->references);
+
+            $source->write($relative, "<?php\nnamespace Broken;\nfinal class Example extends {");
+            try {
+                $parser->parse($path);
+                self::fail('Invalid source must raise a parser error.');
+            } catch (Error $error) {
+                self::assertSame(3, $error->getStartLine());
+            }
+
+            $source->write($relative, "<?php\nnamespace After;\nuse Other\\Second as Port;\n\nfinal class Example extends Port {}");
+            $last = $parser->parse($path);
+            self::assertSame(['After\\Example'], $last->classes);
+            self::assertSame([['class' => 'Other\\Second', 'line' => 5]], $last->references);
+            self::assertEquals((new SourceFileParser())->parse($path), $last);
+
+            $source->write($relative, "<?php\nnamespace FinalVersion;\nfinal class Example {}");
+            $last = $parser->parse($path);
+            self::assertSame(['FinalVersion\\Example'], $last->classes);
+            self::assertSame([], $last->references);
+        } finally {
+            $source->remove();
+        }
+    }
+
     public function testStaticReferencesResolveGroupedImportsAndAllSupportedTypePositions(): void
     {
         $source = new SourceWorkspace();

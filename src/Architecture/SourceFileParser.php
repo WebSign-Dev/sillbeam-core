@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Sillbeam\Core\Architecture;
 
+use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\NodeVisitorAbstract;
+use PhpParser\Parser;
 use PhpParser\ParserFactory;
 use Sillbeam\Core\I18n\CoreMessage;
 use Sillbeam\Core\Module\Attribute\SillbeamModule;
@@ -20,11 +22,13 @@ use Sillbeam\Core\Project\Attribute\SillbeamProject;
  */
 final class SourceFileParser
 {
+    private ?Parser $parser = null;
+
     /**
      * Reads a file and collects name-resolved static references without executing the file.
      *
      * @throws ArchitectureValidationException if the file is unreadable or descriptor attributes are ambiguous
-     * @throws \PhpParser\Error                if the file contains invalid PHP syntax
+     * @throws Error                           if the file contains invalid PHP syntax
      */
     public function parse(string $path, ?string $contents = null, bool $inventoryOnly = false): SourceFile
     {
@@ -33,7 +37,15 @@ final class SourceFileParser
         if (false === $contents) {
             throw ArchitectureValidationException::fatalMessage('source.read', new CoreMessage('finding.source.read', ['path' => $path]), ['file' => $path]);
         }
-        $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse($contents) ?? [];
+        $this->parser ??= (new ParserFactory())->createForNewestSupportedVersion();
+        try {
+            $nodes = $this->parser->parse($contents) ?? [];
+        } catch (Error $error) {
+            // A failed parse can leave partially populated parser state behind.
+            $this->parser = null;
+
+            throw $error;
+        }
         $collector = new class($path, $inventoryOnly, $collectSymbols) extends NodeVisitorAbstract {
             public function __construct(private readonly string $path, private readonly bool $inventoryOnly, private readonly bool $collectSymbols)
             {
