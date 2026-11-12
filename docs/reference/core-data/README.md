@@ -98,4 +98,12 @@ At 100 shared modules, warm PHP allocator peaks were 24 MiB for Live, 38.5 MiB f
 
 An alternating comparison on the 100-module standalone inventory changed only the ownership lookup implementation. The median moved from 748 / 642 ms to 693 / 595 ms across three fresh processes per implementation. The current lookup indexes descriptor directories and reuses ownership results for files in the same directory.
 
-These are local synthetic measurements. Cold timings include PHP and Symfony class loading during the first call, with no control over the OS filesystem cache. The repository's `php tools/benchmark-architecture.php --phase-worker 100 prod` command measures source index reuse and build phases separately.
+These are local synthetic measurements. Cold timings include PHP and Symfony class loading during the first call. The OS filesystem cache is left intact.
+
+Run `php tools/benchmark-architecture.php` for the paired Symfony and Sillbeam lifecycle benchmark. It emits JSON lines for 10, 50 and 100 modules in dev and prod, with five fresh-process samples per operation. The HTTP batches report the first request separately from subsequent requests in the same process.
+
+- `build_cold` starts with an empty Symfony cache. `build_rebuild` forces a new build after priming and removing the Symfony cache. `boot_warm` reuses the compiled container.
+- `cache_clear` runs the default `cache:clear` against an existing cache. `cache_warmup_cold` and `cache_warmup_warm` run `cache:warmup` with an empty and an existing cache, respectively.
+- `architecture` measures the explicit Sillbeam architecture report before container compilation, excluding CLI rendering. Warm boot, warm HTTP and warm cache warmup do not load the source analyzer or parser in this fixture.
+
+Use `php tools/benchmark-architecture.php --phase-worker 100 prod` for a separate, in-process probe of source-index reuse and analysis phases. Its boot samples follow analysis in the same PHP process, so they are not directly comparable to the fresh-process build samples.

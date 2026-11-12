@@ -11,6 +11,8 @@ use Sillbeam\Core\Architecture\ArchitectureDiscovery;
 use Sillbeam\Core\Architecture\CodeDependencyAnalyzer;
 use Sillbeam\Core\Architecture\DiscoveryOptions;
 use Sillbeam\Core\Architecture\SourceInspector;
+use Sillbeam\Core\Console\KernelArchitectureReporter;
+use Sillbeam\Core\Module\ModuleRegistryInterface;
 use Sillbeam\Core\Tests\Support\SourceWorkspace;
 use Sillbeam\Core\Tests\Support\TestApplicationKernel;
 
@@ -70,7 +72,8 @@ if ('--phase-worker' === ($argv[1] ?? null)) {
 }
 
 if ('--sample' === ($argv[1] ?? null)) {
-    [$script, $mode, $directory, $namespace, $environment, $operation, $requests] = $argv;
+    [, , $directory, $namespace, $environment, $operation, $requests, $count] = $argv;
+    $_SERVER['SHELL_VERBOSITY'] = '-1';
     $loader = require dirname(__DIR__).'/vendor/autoload.php';
     $loader->addPsr4($namespace.'\\', $directory.'/src');
     $kernelClass = $namespace.'\\Kernel';
@@ -79,28 +82,35 @@ if ('--sample' === ($argv[1] ?? null)) {
     $kernel = $newKernel();
     try {
         memory_reset_peak_usage();
-        if ('build' === $operation) {
+        if (in_array($operation, ['cache:warmup', 'cache:clear'], true)) {
             $application = new Symfony\Bundle\FrameworkBundle\Console\Application($kernel);
             $application->setAutoExit(false);
             $output = new Symfony\Component\Console\Output\BufferedOutput();
             $start = hrtime(true);
-            $code = $application->run(new Symfony\Component\Console\Input\ArrayInput(['command' => 'cache:warmup']), $output);
+            $code = $application->run(new Symfony\Component\Console\Input\ArrayInput(['command' => $operation]), $output);
             $times[] = (hrtime(true) - $start) / 1e6;
             if (0 !== $code) {
                 throw new RuntimeException($output->fetch());
+            }
+        } elseif ('architecture' === $operation) {
+            $start = hrtime(true);
+            $report = (new KernelArchitectureReporter())->report($kernel);
+            $times[] = (hrtime(true) - $start) / 1e6;
+            if (0 !== $report->exitCode() || (int) $count !== count($report->data['modules'])) {
+                throw new RuntimeException('Explicit architecture report differs from fixture.');
             }
         } elseif ('boot' === $operation) {
             $start = hrtime(true);
             $kernel->boot();
             $times[] = (hrtime(true) - $start) / 1e6;
-        } else {
+        } elseif ('http' === $operation) {
             for ($request = 0; $request <= (int) $requests; ++$request) {
                 $kernel = $newKernel();
-                $input = Symfony\Component\HttpFoundation\Request::create('/m'.($argv[7] - 1));
+                $input = Symfony\Component\HttpFoundation\Request::create('/m'.($count - 1));
                 $start = hrtime(true);
                 $response = $kernel->handle($input);
                 $times[] = (hrtime(true) - $start) / 1e6;
-                if (200 !== $response->getStatusCode() || 'ok:'.(20 * $argv[7]) !== $response->getContent()) {
+                if (200 !== $response->getStatusCode() || 'ok:'.(20 * $count) !== $response->getContent()) {
                     throw new RuntimeException('Benchmark endpoint behavior differs: '.$response->getStatusCode().' '.$response->getContent());
                 }
                 $kernel->terminate($input, $response);
@@ -109,9 +119,20 @@ if ('--sample' === ($argv[1] ?? null)) {
                 }
             }
         }
-        $peak = memory_get_peak_usage(true) / 1024 / 1024;
-        $routes = count($kernel->getContainer()->get('router')->getRouteCollection());
-        echo json_encode(['ms' => $times, 'peak_mib' => $peak, 'routes' => $routes, 'analyzer_loaded' => class_exists(ArchitectureAnalyzer::class, false), 'parser_loaded' => class_exists(PhpParser\ParserFactory::class, false), 'sillbeam_bundle_loaded' => class_exists(Sillbeam\Core\SillbeamCoreBundle::class, false)], \JSON_THROW_ON_ERROR)."\n";
+        $sample = [
+            'ms' => $times, 'peak_mib' => memory_get_peak_usage(true) / 1024 / 1024,
+            'analyzer_loaded' => class_exists(ArchitectureAnalyzer::class, false),
+            'parser_loaded' => class_exists(PhpParser\ParserFactory::class, false),
+            'sillbeam_bundle_loaded' => class_exists(Sillbeam\Core\SillbeamCoreBundle::class, false),
+        ];
+        if ('architecture' !== $operation) {
+            $container = $kernel->getContainer();
+            $sample['container_file'] = (new ReflectionObject($container))->getFileName();
+            $sample['service_ids'] = count($container->getServiceIds());
+            $sample['registry_modules'] = $container->has(ModuleRegistryInterface::class) ? count($container->get(ModuleRegistryInterface::class)->all()) : 0;
+            $sample['routes'] = count($container->get('router')->getRouteCollection());
+        }
+        echo json_encode($sample, \JSON_THROW_ON_ERROR)."\n";
     } finally {
         $kernel->shutdown();
     }
@@ -130,10 +151,10 @@ if (isset($argv[1]) && '--smoke' !== $argv[1]) {
     throw new InvalidArgumentException('Usage: php tools/benchmark-architecture.php [--smoke|--phases]');
 }
 $smoke = '--smoke' === ($argv[1] ?? null);
-$repeats = $smoke ? 1 : 3;
+$repeats = $smoke ? 1 : 5;
 $requests = $smoke ? 5 : 50;
 echo json_encode([
-    'type' => 'metadata', 'schema_version' => 2, 'date_utc' => gmdate(\DATE_ATOM),
+    'type' => 'metadata', 'schema_version' => 3, 'date_utc' => gmdate(\DATE_ATOM),
     'tool_sha256' => hash_file('sha256', __FILE__),
     'composer_lock_sha256' => hash_file('sha256', dirname(__DIR__).'/composer.lock'),
     'http_foundation' => Composer\InstalledVersions::getPrettyVersion('symfony/http-foundation'),
@@ -142,24 +163,59 @@ echo json_encode([
     'memory_limit' => ini_get('memory_limit'), 'repeats' => $repeats, 'http_requests_per_repeat' => $requests,
     'percentile' => 'nearest-rank', 'http_transport' => 'in-process Kernel::handle, fresh kernel per request; excludes network and termination',
     'cold' => 'fresh process and empty Symfony cache; OS cache not flushed',
-    'warm_build' => 'fresh process, existing cache, cache:warmup including Sillbeam fresh validation',
+    'build_rebuild' => 'fresh process, Symfony cache removed after priming, source and OS caches not flushed',
+    'cache_clear' => 'existing cache aged past the current second, default cache:clear with warmup',
+    'cache_warmup_cold' => 'cache:warmup with empty Symfony cache after priming',
+    'cache_warmup_warm' => 'cache:warmup with unchanged existing cache',
+    'architecture' => 'fresh pre-compilation architecture report, excludes CLI rendering',
+    'structure' => 'fixture services exclude controllers; compiled service IDs include framework and aliases',
     'memory' => 'maximum PHP allocated peak per operation across repeats; not RSS',
 ], \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES)."\n";
 foreach ($smoke ? [2] : [10, 50, 100] as $count) {
     foreach ($smoke ? ['prod'] : ['dev', 'prod'] as $environment) {
         $results = [];
         foreach (['symfony', 'sillbeam'] as $variant) {
-            $results[$variant] = ['type' => 'comparison', 'variant' => $variant, 'modules' => $count, 'environment' => $environment, 'services' => 20 * $count, 'routes' => $count, 'response' => 'ok:'.(20 * $count), 'samples_ms' => [], 'peak_mib' => []];
+            $results[$variant] = ['type' => 'comparison', 'variant' => $variant, 'modules' => $count, 'environment' => $environment, 'source_php_files' => 22 * $count + 1, 'services' => 20 * $count, 'routes' => $count, 'response' => 'ok:'.(20 * $count), 'samples_ms' => [], 'peak_mib' => []];
         }
         // Alternate pair order between repetitions to reduce systematic order bias.
         for ($repeat = 0; $repeat < $repeats; ++$repeat) {
             foreach (0 === $repeat % 2 ? ['symfony', 'sillbeam'] : ['sillbeam', 'symfony'] as $variant) {
                 $source = benchmarkFixture($count, $variant);
                 try {
-                    foreach (['build_cold' => 'build', 'build_warm' => 'build', 'boot_warm' => 'boot', 'http_warm' => 'http'] as $metric => $operation) {
+                    $operations = [
+                        'build_cold' => 'boot', 'boot_warm' => 'boot', 'cache_warmup_warm' => 'cache:warmup',
+                        'http_warm' => 'http', 'cache_clear' => 'cache:clear', 'build_rebuild' => 'boot',
+                        'cache_warmup_cold' => 'cache:warmup',
+                    ];
+                    if ('sillbeam' === $variant) {
+                        $operations['architecture'] = 'architecture';
+                    }
+                    foreach ($operations as $metric => $operation) {
+                        if (in_array($metric, ['build_rebuild', 'cache_warmup_cold'], true)) {
+                            (new Symfony\Component\Filesystem\Filesystem())->remove($source->directory.'/var/cache');
+                        }
+                        if ('cache_clear' === $metric) {
+                            // Symfony skips rebuilding containers generated during the current second.
+                            while (filemtime($containerFile) >= time()) {
+                                usleep(20_000);
+                            }
+                        }
                         $sample = benchmarkProcess(['--sample', $source->directory, $source->namespace, $environment, $operation, (string) $requests, (string) $count]);
-                        if ($count !== $sample['routes']) {
-                            throw new RuntimeException('Benchmark route count differs.');
+                        if ('architecture' !== $metric) {
+                            $containerFile = $sample['container_file'];
+                            if ($count !== $sample['routes'] || ('sillbeam' === $variant ? $count : 0) !== $sample['registry_modules']) {
+                                throw new RuntimeException('Benchmark route or module count differs.');
+                            }
+                        }
+                        $expectsAnalysis = 'sillbeam' === $variant && in_array($metric, ['build_cold', 'cache_clear', 'build_rebuild', 'cache_warmup_cold', 'architecture'], true);
+                        if ($expectsAnalysis !== $sample['analyzer_loaded'] || $expectsAnalysis !== $sample['parser_loaded']) {
+                            throw new RuntimeException('Unexpected source analysis state for '.$variant.' '.$environment.' '.$metric);
+                        }
+                        $results[$variant]['analysis_loaded'][$metric] = $sample['analyzer_loaded'];
+                        if ('build_cold' === $metric) {
+                            $results[$variant]['compiled_service_ids'] = $sample['service_ids'];
+                            $results[$variant]['registry_modules'] = $sample['registry_modules'];
+                            $results[$variant]['cache_bytes_after_build'] = array_sum(array_map(static fn (SplFileInfo $file): int => $file->getSize(), iterator_to_array(Symfony\Component\Finder\Finder::create()->files()->in($source->directory.'/var/cache'))));
                         }
                         $results[$variant]['peak_mib'][$metric] = max($results[$variant]['peak_mib'][$metric] ?? 0, $sample['peak_mib']);
                         if ('http' === $operation) {
@@ -167,9 +223,6 @@ foreach ($smoke ? [2] : [10, 50, 100] as $count) {
                             $results[$variant]['http_analyzer_loaded'] = $sample['analyzer_loaded'];
                             $results[$variant]['http_parser_loaded'] = $sample['parser_loaded'];
                             $results[$variant]['http_sillbeam_bundle_loaded'] = $sample['sillbeam_bundle_loaded'];
-                            if ('prod' === $environment && ($sample['analyzer_loaded'] || $sample['parser_loaded'])) {
-                                throw new RuntimeException('Production HTTP unexpectedly loaded source analysis.');
-                            }
                         }
                         $results[$variant]['samples_ms'][$metric] = [...($results[$variant]['samples_ms'][$metric] ?? []), ...$sample['ms']];
                     }
