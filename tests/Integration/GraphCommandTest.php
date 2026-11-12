@@ -10,8 +10,10 @@ use Sillbeam\Core\Architecture\ArchitectureAnalyzer;
 use Sillbeam\Core\Architecture\ArchitectureFinding;
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\Console\GraphCommand;
+use Sillbeam\Core\Architecture\Console\MermaidGraph;
 use Sillbeam\Core\Architecture\DiscoveryOptions;
 use Sillbeam\Core\Console\Application;
+use Sillbeam\Core\I18n\CoreTranslator;
 use Sillbeam\Core\Tests\Support\SourceWorkspace;
 use Sillbeam\Core\Tests\Support\TestApplicationKernel;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -51,6 +53,17 @@ final class GraphCommandTest extends TestCase
         $data['modules'] = array_reverse($data['modules']);
         $data['modules'][0]['declared_dependencies'] = array_reverse($data['modules'][0]['declared_dependencies']);
         self::assertSame($text, $this->command(new ArchitectureReport($data, $report->presentation))->getDisplay());
+    }
+
+    public function testMermaidUsesItsLocaleWhenRenderingAReportDirectly(): void
+    {
+        $this->module('Billing', ['Missing\\Module']);
+        $source = (new MermaidGraph(new CoreTranslator('de')))->render($this->report());
+        self::assertStringStartsWith("flowchart LR\n", $source);
+        self::assertStringContainsString('m0001 --> u0001', $source);
+        self::assertStringContainsString('Nicht aufgelöstes Zielmodul', $source);
+        self::assertStringContainsString('Zustand#61;unbekannt', $source);
+        self::assertStringNotContainsString('state#61;unknown', $source);
     }
 
     public function testObservedUndeclaredReferencesAreDistinctAndDeduplicated(): void

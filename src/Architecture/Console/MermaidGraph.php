@@ -17,7 +17,7 @@ final class MermaidGraph
     /** Returns raw source, with captions/comments rather than disconnected status nodes. */
     public function render(ArchitectureReport|GraphView $report): string
     {
-        $view = $report instanceof GraphView ? $report : GraphView::fromReport($report);
+        $view = $report instanceof GraphView ? $report : GraphView::fromReport($report, translator: $this->translator);
         $lines = ['flowchart LR'];
         foreach ($view->notes as $note) {
             $lines[] = '    %% '.$this->plain($note);

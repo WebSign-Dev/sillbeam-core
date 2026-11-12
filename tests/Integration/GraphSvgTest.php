@@ -7,6 +7,7 @@ namespace Sillbeam\Core\Tests\Integration;
 use PHPUnit\Framework\TestCase;
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\Console\GraphCommand;
+use Sillbeam\Core\Architecture\Console\GraphLayout;
 use Sillbeam\Core\Architecture\Console\GraphView;
 use Sillbeam\Core\Architecture\Console\SvgGraph;
 use Sillbeam\Core\Architecture\Console\SvgOutput;
@@ -223,6 +224,60 @@ final class GraphSvgTest extends TestCase
             self::assertTrue(isset($text['textLength']), 'Text must have an explicit bounded SVG width.');
             self::assertLessThanOrEqual(296, (float) $text['textLength']);
         }
+    }
+
+    public function testSvgUsesLayoutGeometryForCardsScopesAndEdges(): void
+    {
+        $view = GraphView::fromReport($this->report());
+        $layout = (new GraphLayout())->layout($view);
+        $svg = (new SvgGraph())->render($view);
+        $xml = simplexml_load_string($svg);
+        self::assertNotFalse($xml);
+        $xml->registerXPathNamespace('s', 'http://www.w3.org/2000/svg');
+        self::assertSame('0 0 '.$layout['width'].' '.$layout['height'], (string) $xml['viewBox']);
+        foreach (['m0001' => $layout['nodes']['App\\Billing'], 'scope-shared_scope' => $layout['scopes']['shared_scope']] as $id => $box) {
+            $rectangles = $xml->xpath('//s:g[@id="'.$id.'"]/s:rect');
+            self::assertIsArray($rectangles);
+            self::assertCount(1, $rectangles);
+            foreach (['x', 'y', 'width', 'height'] as $property) {
+                self::assertSame((string) $box[$property], (string) $rectangles[0][$property]);
+            }
+        }
+        $paths = $xml->xpath('//s:path[@id="edge-1"]');
+        self::assertIsArray($paths);
+        self::assertCount(1, $paths);
+        preg_match_all('/\d+/', (string) $paths[0]['d'], $coordinates);
+        self::assertSame(array_merge(...$layout['edges'][0]['points']), array_map(intval(...), $coordinates[0]));
+    }
+
+    public function testLocalizedSvgIncludesExternalAndRelationshipLabels(): void
+    {
+        $data = $this->report('violations')->data;
+        $data['modules'][0]['observed_dependencies'] = ['App\\Unknown'];
+        $data['modules'][1]['scope'] = 'private';
+        $data['modules'][1]['project'] = 'App\\Admin';
+        $data['projects'] = [
+            ['id' => 'shop', 'class' => 'App\\Shop', 'modules' => null],
+            ['id' => 'admin', 'class' => 'App\\Admin', 'modules' => null],
+        ];
+        $data['complete'] = false;
+        $tester = new CommandTester(new GraphCommand(new ArchitectureReport($data)));
+        $path = $this->source->directory.'/localized.svg';
+        $options = ['--project' => 'shop', '--output' => $path];
+        self::assertSame(1, $tester->execute($options + ['--locale' => 'en']));
+        $english = (string) file_get_contents($path);
+        self::assertSame(1, $tester->execute($options + ['--locale' => 'de', '--force' => true]));
+        $german = (string) file_get_contents($path);
+        foreach (['external to Project context', '(declared)', '(observed undeclared)', 'Analysis incomplete'] as $text) {
+            self::assertStringContainsString($text, $english);
+            self::assertStringNotContainsString($text, $german);
+        }
+        foreach (['außerhalb des Projektkontexts', '(deklariert)', '(beobachtet, nicht deklariert)', 'Analyse unvollständig', 'Zustand=unbekannt'] as $text) {
+            self::assertStringContainsString($text, $german);
+        }
+        self::assertStringContainsString('data-source="m0001" data-target="m0002"', $german);
+        self::assertStringNotContainsString('Zustand=aktiv', $german);
+        self::assertStringNotContainsString('Zustand=unknown', $german);
     }
 
     private function report(string $status = 'valid'): ArchitectureReport

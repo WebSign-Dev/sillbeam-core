@@ -36,20 +36,24 @@ download assets, or call an external service. It also works with process functio
 such as `proc_open` disabled. You can open the resulting SVG in a normal image
 viewer, browser or editor yourself.
 
-The renderer lays out the existing catalog in scope columns. Every direct edge
-has its own routing lane beside nodes; cross-scope edges use separate channels
-above the columns. This deterministic layout does not sort by dependencies or run
-a graph traversal. Text wraps within node boxes; descriptors remain complete in
-tooltips. Dense architectures need more space and may have crossing lines; use
-`--module` to focus on immediate relationships without hiding evidence in the
-unfiltered graph. No crossing-minimization or Graphviz-equivalent layout is promised.
+The native SVG places direct dependencies from left to right across layers.
+Horizontal bands group shared modules, private modules by Project, modules with
+unknown owners and unresolved targets. Strongly connected nodes share a layer
+for placement. Only recorded cycle findings mark cards as cycle members.
+The layout makes four ordering passes to reduce crossings and routes edges
+orthogonally around cards. Routes between non-adjacent layers use tracks above
+the cards in one of the endpoint bands. Module labels wrap inside their cards.
+Full descriptor classes and relationship types are available in SVG tooltips.
+Canvas dimensions grow with the layout. Dense graphs can still have crossing
+or partly overlapping edges. Use `--module` to focus on direct relationships.
 
 ## Identity and presentation
 
 The graph consumes the same `ArchitectureReport` as
 [module inspection](module-inspection.md). A common presentation view supplies
-both Mermaid and SVG directly. SVG is never recovered by parsing Mermaid. No new
-discovery, parser, dependency traversal, cycle detector or architecture rules run.
+both Mermaid and SVG directly. The SVG layout traverses those visible edges
+solely for placement and routing. Export does not run additional discovery,
+source parsing or architecture rules.
 The normal Symfony command uses the compiled snapshot; the Core adapter uses the
 existing guarded reporter before container boot. Architecture JSON schemas and
 activation semantics remain unchanged.
@@ -68,7 +72,9 @@ and unresolved target classes remain explicit. Project membership is separate fr
 dependency edges; no Project-as-module nodes or membership arrows clutter the graph.
 Projects with no private modules in the view appear in the caption. Status and
 legend are graph captions, never disconnected architecture nodes. Detailed existing
-findings are retained in Mermaid comments and the SVG description/relationship tooltips.
+findings are retained in Mermaid comments and the SVG description. The status
+panel above the SVG scope bands reports analysis and reference completeness
+separately from the activation state on each card.
 
 | Representation | Meaning |
 | --- | --- |
@@ -82,8 +88,6 @@ findings are retained in Mermaid comments and the SVG description/relationship t
 Duplicate declarations/references are deduplicated; a declared relationship is not
 shown a second time as observed. All direct relationships remain visible in the
 unfiltered view. No transitive edges, reduction or dependency pruning are performed.
-The column layout uses spaced, compact nodes and Project clusters. Dense
-architectures still require space; use the module filter for a focused diagram.
 
 ## Module and Project filters
 
@@ -151,7 +155,8 @@ works even when container compilation fails; see the [CLI reference](cli.md).
 Ordinary Symfony requires a bootable container and uses its existing snapshot.
 
 Node/edge/finding ordering and SVG/Mermaid source are deterministic for identical
-report evidence. External labels are safely escaped (XML text in SVG,
+report evidence and locale. Use `--locale=en` or `--locale=de` to select the
+language of graph labels and relationship tooltips. External labels are safely escaped (XML text in SVG,
 Mermaid decimal entities); input cannot supply node identifiers, attributes, HTML
 labels or graph statements. Unicode is preserved, invalid UTF-8/control characters
 are made safe. SVG bytes are deterministic for the same evidence. Installed viewer fonts can
