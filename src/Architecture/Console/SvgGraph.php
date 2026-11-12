@@ -49,17 +49,6 @@ final class SvgGraph
             }
             $svg[] = '</g>';
         }
-        $declaredLabel = $this->translator->text('cli.graph.label.declared');
-        $observedLabel = $this->translator->text('cli.graph.label.observed_undeclared');
-        foreach ($layout['edges'] as $index => ['edge' => $edge, 'points' => $points]) {
-            $source = $view->nodes[$edge['source']];
-            $target = $view->nodes[$edge['target']];
-            $observed = $edge['observed'];
-            $kind = $observed ? 'observed' : 'declared';
-            $label = $observed ? $observedLabel : $declaredLabel;
-            $path = 'M '.implode(' L ', array_map(static fn (array $point): string => implode(' ', $point), $points));
-            $svg[] = '<path id="edge-'.($index + 1).'" class="dependency '.$kind.'" data-source="'.$source['id'].'" data-target="'.$target['id'].'" d="'.$path.'" fill="none" stroke="'.($observed ? self::OBSERVED_COLOR : self::DECLARED_COLOR).'" stroke-width="1.5" stroke-linejoin="round"'.($observed ? ' stroke-dasharray="6 4"' : '').' marker-end="url(#arrow-'.$kind.')"><title>'.$this->escape($source['class'].' → '.$target['class'].' ('.$label.')').'</title></path>';
-        }
         foreach ($layout['nodes'] as $class => $position) {
             $node = $view->nodes[$class];
             $stroke = $node['cycle'] ? '#c22' : ('unresolved' === $node['group'] ? '#9a6b34' : '#64788d');
@@ -74,6 +63,18 @@ final class SvgGraph
                 $svg[] = $this->text($line, $position['x'] + 12, $position['y'] + 22 + $index * GraphLayout::LINE_HEIGHT, $heading ? 15 : 12, $heading, $position['width'] - 24);
             }
             $svg[] = '</g>';
+        }
+        // Paint arrow tips over the card border at their shared endpoint.
+        $declaredLabel = $this->translator->text('cli.graph.label.declared');
+        $observedLabel = $this->translator->text('cli.graph.label.observed_undeclared');
+        foreach ($layout['edges'] as $index => ['edge' => $edge, 'points' => $points]) {
+            $source = $view->nodes[$edge['source']];
+            $target = $view->nodes[$edge['target']];
+            $observed = $edge['observed'];
+            $kind = $observed ? 'observed' : 'declared';
+            $label = $observed ? $observedLabel : $declaredLabel;
+            $path = 'M '.implode(' L ', array_map(static fn (array $point): string => implode(' ', $point), $points));
+            $svg[] = '<path id="edge-'.($index + 1).'" class="dependency '.$kind.'" data-source="'.$source['id'].'" data-target="'.$target['id'].'" d="'.$path.'" fill="none" stroke="'.($observed ? self::OBSERVED_COLOR : self::DECLARED_COLOR).'" stroke-width="1.5" stroke-linejoin="round"'.($observed ? ' stroke-dasharray="6 4"' : '').' marker-end="url(#arrow-'.$kind.')"><title>'.$this->escape($source['class'].' → '.$target['class'].' ('.$label.')').'</title></path>';
         }
         $svg[] = '</g></svg>';
 

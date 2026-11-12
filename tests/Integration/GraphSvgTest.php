@@ -250,6 +250,46 @@ final class GraphSvgTest extends TestCase
         self::assertSame(array_merge(...$layout['edges'][0]['points']), array_map(intval(...), $coordinates[0]));
     }
 
+    public function testArrowTipsAreAnchoredAtTargetBordersAndPaintedAboveCards(): void
+    {
+        $data = $this->report('violations')->data;
+        $data['modules'][0]['observed_dependencies'] = ['App\\Unknown'];
+        $data['modules'][1]['observed_dependencies'] = ['App\\Billing'];
+        $data['findings'][] = ['rule' => 'dependency.cycle', 'message' => 'Existing cycle finding', 'context' => ['cycle' => 'App\\Billing, App\\Payments']];
+        $svg = (new SvgGraph())->render(GraphView::fromReport(new ArchitectureReport($data)));
+        $xml = simplexml_load_string($svg);
+        self::assertNotFalse($xml);
+        $xml->registerXPathNamespace('s', 'http://www.w3.org/2000/svg');
+
+        foreach (['declared', 'observed'] as $kind) {
+            $markers = $xml->xpath('//s:marker[@id="arrow-'.$kind.'"]');
+            self::assertIsArray($markers);
+            self::assertCount(1, $markers);
+            self::assertSame('10', (string) $markers[0]['refX']);
+            self::assertSame('5', (string) $markers[0]['refY']);
+            self::assertSame('auto', (string) $markers[0]['orient']);
+        }
+        foreach ([
+            ['edge-1', 'm0002', 'declared', -1],
+            ['edge-2', 'u0001', 'observed', 1],
+            ['edge-3', 'm0001', 'observed', -1],
+        ] as [$id, $target, $kind, $direction]) {
+            $paths = $xml->xpath('//s:path[@id="'.$id.'"]');
+            $cards = $xml->xpath('//s:path[@id="'.$id.'"]/preceding-sibling::s:g[@id="'.$target.'"]/s:rect');
+            self::assertIsArray($paths);
+            self::assertCount(1, $paths);
+            self::assertIsArray($cards);
+            self::assertCount(1, $cards, 'The target card must be painted before the arrow tip.');
+            self::assertSame('url(#arrow-'.$kind.')', (string) $paths[0]['marker-end']);
+            preg_match_all('/\d+/', (string) $paths[0]['d'], $coordinates);
+            [$fromX, $fromY, $toX, $toY] = array_map(intval(...), \array_slice($coordinates[0], -4));
+            $border = (int) $cards[0]['x'] + (1 === $direction ? 0 : (int) $cards[0]['width']);
+            self::assertSame($border, $toX);
+            self::assertSame($fromY, $toY);
+            self::assertGreaterThan(0, ($toX - $fromX) * $direction);
+        }
+    }
+
     public function testLocalizedSvgIncludesExternalAndRelationshipLabels(): void
     {
         $data = $this->report('violations')->data;
