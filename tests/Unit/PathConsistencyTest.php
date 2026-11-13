@@ -6,6 +6,7 @@ namespace Sillbeam\Core\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Sillbeam\Core\Architecture\ArchitectureDiscovery;
+use Sillbeam\Core\Architecture\AreaDirectoryMap;
 use Sillbeam\Core\Architecture\DiscoveryOptions;
 use Sillbeam\Core\Architecture\DiscoveryOptionsResolver;
 use Sillbeam\Core\Architecture\DiscoveryRoot;
@@ -100,6 +101,44 @@ final class PathConsistencyTest extends TestCase
         } finally {
             $source->remove();
         }
+    }
+
+    public function testDirectoryGroupsPreserveEmptyDirectoriesExclusionsAndOrder(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $root = $source->directory.'/src';
+            mkdir($root.'/Z/Controller', recursive: true);
+            mkdir($root.'/A/Entity', recursive: true);
+            mkdir($root.'/Private/Controller', recursive: true);
+            mkdir($root.'/Ignored/Entity', recursive: true);
+            $options = new DiscoveryOptions($root, $source->namespace.'\\', excludes: ['Ignored']);
+            self::assertSame([
+                'controllers' => [$root.'/Z/Controller'],
+                'entities' => [$root.'/A/Entity'],
+                'both' => [$root.'/A/Entity', $root.'/Z/Controller'],
+            ], (new SourceInspector())->directoryGroups($root, [
+                'controllers' => ['**/Controller'],
+                'entities' => ['**/Entity'],
+                'both' => ['**/Controller', '**/Entity'],
+            ], [$root.'/Private'], $options));
+        } finally {
+            $source->remove();
+        }
+    }
+
+    public function testAreaLookupKeepsProjectMembershipAndPrefersPrivateModules(): void
+    {
+        $areas = new AreaDirectoryMap([
+            '/src/Shop' => 'Project',
+            '/src/Shop/Private' => 'Module',
+        ]);
+        self::assertSame(['Module', 'Project'], iterator_to_array($areas->containing('/src/Shop/Private/Controller/Home.php'), false));
+        self::assertSame(['Project'], iterator_to_array($areas->containing('/src/Shop/Private'), false));
+        self::assertSame(['Module', 'Project'], iterator_to_array($areas->containing('/src/Shop/Private/'), false));
+        self::assertSame([], iterator_to_array($areas->containing('/src/Shopper/Private/Home.php'), false));
+        self::assertSame('Module', $areas->owner('/src/Shop/Private/Controller/Home.php'));
+        self::assertNull($areas->owner('/src/Shopper/Home.php'));
     }
 
     public function testDirectoryScanNormalizesRootAndExcludedRoots(): void

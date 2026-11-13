@@ -7,6 +7,7 @@ namespace Sillbeam\Core\DependencyInjection;
 use Sillbeam\Core\Architecture\ArchitectureAnalysisResult;
 use Sillbeam\Core\Architecture\ArchitectureAnalyzer;
 use Sillbeam\Core\Architecture\ArchitectureReport;
+use Sillbeam\Core\Architecture\AreaDirectoryMap;
 use Sillbeam\Core\Architecture\CompiledArchitecture;
 use Sillbeam\Core\Architecture\Console\ArchitectureCommand;
 use Sillbeam\Core\Architecture\Console\GraphCommand;
@@ -143,12 +144,10 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         $configurationDirectory = $projectDir.'/config';
         $container->addResource(is_dir($configurationDirectory) ? new DirectoryResource($configurationDirectory) : new FileExistenceResource($configurationDirectory));
         $report = ArchitectureReport::fromLocalizedAnalysis($analysis, $config, $projectDir, new CoreTranslator(), compiled: true);
-        // Source-derived diagnostic text may contain literal Symfony placeholder syntax.
-        $parameters = $container->getParameterBag();
-        $container->register(ArchitectureReport::class)->setArguments([
-            $parameters->escapeValue($report->data),
-            $parameters->escapeValue($report->presentation),
-        ]);
+        // Keep the report opaque to compiler passes and preserve literal parameter syntax.
+        $container->register(ArchitectureReport::class)
+            ->setFactory([CompiledArchitectureReport::class, 'restore'])
+            ->setArguments([base64_encode(serialize([$report->data, $report->presentation]))]);
         $architecture = $analysis->architecture;
         $container->register(SillbeamRouteLoader::class)->setArguments([
             new Reference('routing.loader.attribute.file'),
@@ -284,22 +283,22 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
     private function controllerFiles(CompiledArchitecture $architecture): array
     {
         $files = $this->inspector?->files($this->options ?? throw new \LogicException('Missing discovery options.')) ?? [];
-        $result = [];
-        $definitions = array_values($architecture->projects);
+        $definitions = $architecture->projects;
         foreach ($architecture->usedModules() as $class) {
-            $definitions[] = $architecture->modules[$class];
+            $definitions[$class] = $architecture->modules[$class];
         }
-        foreach ($definitions as $definition) {
-            $result[$definition->class] = [];
-            foreach ($files as $file) {
-                if (!$this->belongsToArea($file->path, $definition->class, $architecture)) {
-                    continue;
-                }
-                foreach ($definition->controllerDirectories as $directory) {
-                    if (str_starts_with($file->path, $directory.'/')) {
-                        $result[$definition->class][] = $file->path;
-                        break;
-                    }
+        $result = array_fill_keys(array_keys($definitions), []);
+        $modules = new AreaDirectoryMap(array_column($architecture->modules, 'class', 'directory'));
+        $projects = new AreaDirectoryMap(array_column($architecture->projects, 'class', 'directory'));
+        foreach ($files as $file) {
+            $class = $modules->owner($file->path) ?? $projects->owner($file->path);
+            if (null === $class || !isset($definitions[$class])) {
+                continue;
+            }
+            foreach ($definitions[$class]->controllerDirectories as $directory) {
+                if (str_starts_with($file->path, $directory.'/')) {
+                    $result[$class][] = $file->path;
+                    break;
                 }
             }
         }
@@ -346,33 +345,41 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         $options = $this->options ?? throw new \LogicException('Sillbeam discovery options are missing.');
         $files = ($this->inspector ?? throw new \LogicException('Sillbeam source index is missing.'))->files($options);
         $loader = new ArchitectureServiceLoader();
-        $definitions = array_values($architecture->projects);
+        $modules = [];
         foreach ($architecture->usedModules() as $class) {
-            $definitions[] = $architecture->modules[$class];
+            $modules[$class] = $architecture->modules[$class];
         }
-        foreach ($definitions as $definition) {
-            $excludes = [];
+        $definitions = [...$architecture->projects, ...$modules];
+        $areas = [
+            new AreaDirectoryMap(array_column($architecture->projects, null, 'directory')),
+            new AreaDirectoryMap(array_column($modules, null, 'directory')),
+        ];
+        $excludes = [];
+        foreach ($areas as $area) {
             foreach ($architecture->modules as $module) {
-                if ($module->class !== $definition->class && str_starts_with($module->directory.'/', $definition->directory.'/')) {
-                    $excludes[] = $module->directory.'/';
+                foreach ($area->containing($module->directory.'/') as $definition) {
+                    if ($module->class !== $definition->class) {
+                        $excludes[$definition->class][] = $module->directory.'/';
+                    }
                 }
             }
             foreach ($files as $file) {
-                if (!str_starts_with($file->path, $definition->directory.'/')) {
-                    continue;
-                }
-                $relative = substr($file->path, \strlen($definition->directory) + 1);
-                if ($options->excluded($file->path) || PathMatcher::matches($relative, $options->serviceExcludes)) {
-                    $excludes[] = $file->path;
+                foreach ($area->containing($file->path) as $definition) {
+                    $relative = substr($file->path, \strlen($definition->directory) + 1);
+                    if ($options->excluded($file->path) || PathMatcher::matches($relative, $options->serviceExcludes)) {
+                        $excludes[$definition->class][] = $file->path;
+                    }
                 }
             }
-            // Propagate the source index's pruned paths even through enclosing Project imports.
+            // Propagate pruned paths through every enclosing service import.
             foreach ($this->inspector->excludedPaths($options) as $path) {
-                if (str_starts_with($path, $definition->directory.'/')) {
-                    $excludes[] = $path;
+                foreach ($area->containing($path) as $definition) {
+                    $excludes[$definition->class][] = $path;
                 }
             }
-            $loader->load($container, $definition->directory, $definition->namespace, $definition->descriptorFile, false, $excludes, true);
+        }
+        foreach ($definitions as $definition) {
+            $loader->load($container, $definition->directory, $definition->namespace, $definition->descriptorFile, false, $excludes[$definition->class] ?? [], true);
         }
         $loader->finish();
     }

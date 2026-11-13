@@ -219,15 +219,25 @@ final class SourceInspector
      */
     public function directories(string $root, array $patterns, array $excludedRoots = [], ?DiscoveryOptions $options = null): array
     {
-        if ($this->inventoryOnly) {
-            return [];
-        }
+        return $this->directoryGroups($root, [$patterns], $excludedRoots, $options)[0];
+    }
+
+    /**
+     * @template T of array-key
+     *
+     * @param array<T, list<string>> $patterns
+     * @param list<string>           $excludedRoots
+     *
+     * @return array<T, list<string>>
+     */
+    public function directoryGroups(string $root, array $patterns, array $excludedRoots = [], ?DiscoveryOptions $options = null): array
+    {
+        $directories = array_fill_keys(array_keys($patterns), []);
         $root = FilesystemPath::normalize($root);
-        $excludedRoots = array_map(FilesystemPath::normalize(...), $excludedRoots);
-        if (!is_dir($root)) {
-            return [];
+        if ($this->inventoryOnly || !is_dir($root)) {
+            return $directories;
         }
-        $directories = [];
+        $excludedRoots = array_map(FilesystemPath::normalize(...), $excludedRoots);
         $excluded = static function (\SplFileInfo $entry) use ($excludedRoots, $options): bool {
             foreach ($excludedRoots as $excludedRoot) {
                 if (FilesystemPath::normalize($entry->getPathname()) === $excludedRoot || str_starts_with(FilesystemPath::normalize($entry->getPathname()), FilesystemPath::directoryPrefix($excludedRoot))) {
@@ -238,12 +248,22 @@ final class SourceInspector
             return null === $options || !$options->excluded(FilesystemPath::normalize($entry->getPathname()));
         };
         $iterator = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS), $excluded), \RecursiveIteratorIterator::SELF_FIRST);
+        $prefixLength = \strlen(FilesystemPath::directoryPrefix($root));
         foreach ($iterator as $entry) {
-            if ($entry->isDir() && PathMatcher::matches(substr(FilesystemPath::normalize($entry->getPathname()), \strlen(FilesystemPath::directoryPrefix($root))), $patterns)) {
-                $directories[] = FilesystemPath::normalize($entry->getPathname());
+            if (!$entry->isDir()) {
+                continue;
+            }
+            $path = FilesystemPath::normalize($entry->getPathname());
+            $relative = substr($path, $prefixLength);
+            foreach ($patterns as $group => $groupPatterns) {
+                if (PathMatcher::matches($relative, $groupPatterns)) {
+                    $directories[$group][] = $path;
+                }
             }
         }
-        sort($directories);
+        foreach ($directories as &$matches) {
+            sort($matches);
+        }
 
         return $directories;
     }

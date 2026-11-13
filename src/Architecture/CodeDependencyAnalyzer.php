@@ -6,7 +6,6 @@ namespace Sillbeam\Core\Architecture;
 
 use Composer\Autoload\ClassLoader;
 use Sillbeam\Core\I18n\CoreMessage;
-use Sillbeam\Core\Module\ModuleDefinition;
 
 /**
  * Checks static module references against declared dependencies, privacy and activation.
@@ -61,12 +60,14 @@ final readonly class CodeDependencyAnalyzer
         $applicationReferences = array_fill_keys(array_keys($discovery->modules), []);
         $references = array_fill_keys(array_keys($discovery->modules), []);
         $active = array_fill_keys($architecture->usedModules(), true);
+        $moduleDirectories = new AreaDirectoryMap(array_column($discovery->modules, null, 'directory'));
+        $projectDirectories = new AreaDirectoryMap(array_column($discovery->projects, null, 'directory'));
         foreach ($files as $file) {
             foreach ($file->classes as $class) {
                 $knownClasses[strtolower($class)] = true;
                 $classFiles[strtolower($class)] = ['class' => $class, 'file' => $file->path];
             }
-            $owner = $this->owner($file->path, $discovery->modules);
+            $owner = $moduleDirectories->owner($file->path);
             if (null === $owner) {
                 continue;
             }
@@ -85,12 +86,10 @@ final readonly class CodeDependencyAnalyzer
             $context = null === $source ? null : ['module' => $source->class, 'project' => $source->projectClass];
             $directory = $source?->directory;
             if (null === $context) {
-                foreach ($discovery->projects as $project) {
-                    if (str_starts_with($file->path, $project->directory.'/')) {
-                        $context = ['project' => $project->class];
-                        $directory = $project->directory;
-                        break;
-                    }
+                $project = $projectDirectories->owner($file->path);
+                if (null !== $project) {
+                    $context = ['project' => $project->class];
+                    $directory = $project->directory;
                 }
             }
             if (null === $context || null === $directory || PathMatcher::matches(substr($file->path, \strlen($directory) + 1), ['Tests/**', '**/Tests/**', 'Fixtures/**', '**/Fixtures/**'])) {
@@ -230,17 +229,5 @@ final readonly class CodeDependencyAnalyzer
         }
 
         return false;
-    }
-
-    /** @param array<class-string, ModuleDefinition> $modules */
-    private function owner(string $file, array $modules): ?ModuleDefinition
-    {
-        foreach ($modules as $module) {
-            if (str_starts_with($file, $module->directory.'/')) {
-                return $module;
-            }
-        }
-
-        return null;
     }
 }

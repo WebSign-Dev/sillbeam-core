@@ -157,6 +157,29 @@ final class ArchitectureAnalysisTest extends TestCase
         $valid->throwIfInvalid();
     }
 
+    public function testRepeatedAnalysisObservesAddedEditedAndRemovedSourceFiles(): void
+    {
+        $this->source->php('src/Module/A/AModule.php', '#[\\Sillbeam\\Core\\Module\\Attribute\\SillbeamModule] final class AModule {}');
+        $analyzer = new ArchitectureAnalyzer();
+        self::assertTrue($analyzer->analyze($this->options())->isValid());
+
+        $file = 'src/Module/A/Controller/Endpoint.php';
+        $this->source->php($file, 'final class Endpoint {}');
+        $added = $analyzer->analyze($this->options());
+        self::assertTrue($added->isValid());
+        self::assertContains($this->source->directory.'/'.$file, $added->discovery->resources ?? []);
+
+        $this->source->php($file, 'invalid PHP !!!');
+        $invalid = $analyzer->analyze($this->options());
+        self::assertFalse($invalid->isComplete());
+        self::assertSame('source.parse', $invalid->findings[0]->rule);
+
+        unlink($this->source->directory.'/'.$file);
+        $removed = $analyzer->analyze($this->options());
+        self::assertTrue($removed->isValid());
+        self::assertNotContains($this->source->directory.'/'.$file, $removed->discovery->resources ?? []);
+    }
+
     public function testDisabledDependenciesRemainInactiveForCodeAnalysis(): void
     {
         $b = $this->source->php('src/Module/B/BModule.php', '#[\\Sillbeam\\Core\\Module\\Attribute\\SillbeamModule] final class BModule {}');

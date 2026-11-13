@@ -26,6 +26,32 @@ final class ArchitectureReportingTest extends TestCase
         $this->source->remove();
     }
 
+    public function testCompiledReportRetainsLiteralParametersAndPresentation(): void
+    {
+        $this->module('A');
+        $kernel = new TestApplicationKernel($this->source);
+        try {
+            $kernel->boot();
+            $container = $kernel->getContainer()->get('test.service_container');
+            self::assertInstanceOf(\Psr\Container\ContainerInterface::class, $container);
+            $report = $container->get(\Sillbeam\Core\Architecture\ArchitectureReport::class);
+            self::assertInstanceOf(\Sillbeam\Core\Architecture\ArchitectureReport::class, $report);
+            self::assertSame('a', $report->data['modules'][0]['id']);
+            self::assertNotEmpty($report->presentation);
+            $payload = new \Sillbeam\Core\Architecture\ArchitectureReport(
+                ['literal' => "%kernel.environment% %env(NOT_SET)% \xFF"],
+                ['localized' => 'Grüße'],
+            );
+            $restored = \Sillbeam\Core\DependencyInjection\CompiledArchitectureReport::restore(
+                base64_encode(serialize([$payload->data, $payload->presentation])),
+            );
+            self::assertSame($payload->data, $restored->data);
+            self::assertSame($payload->presentation, $restored->presentation);
+        } finally {
+            $kernel->shutdown();
+        }
+    }
+
     public function testJsonReportsValidCatalogWithoutBootingABrokenServiceContainer(): void
     {
         $this->module('A');

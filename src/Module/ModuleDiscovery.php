@@ -62,17 +62,22 @@ final readonly class ModuleDiscovery
                 }
             }
             $metadata = $this->inspector->metadata($class, $file, SillbeamModule::class);
+            $id = $metadata->id ?? IdDeriver::fromClass($class, 'Module', $file);
+            $namespace = $options->namespaceForDirectory($directory);
+            [$entities, $controllers] = $this->inspector->directoryGroups(
+                $directory, [$options->entityPatterns, $options->controllerPatterns], options: $options,
+            );
             $modules[$class] = new ModuleDefinition(
-                id: $metadata->id ?? IdDeriver::fromClass($class, 'Module', $file),
+                id: $id,
                 class: $class,
                 description: $metadata->description,
                 dependencies: $metadata->dependencies,
                 enabled: true,
                 directory: $directory,
                 descriptorFile: $file,
-                namespace: $options->namespaceForDirectory($directory),
-                entityDirectories: $this->inspector->directories($directory, $options->entityPatterns, options: $options),
-                controllerDirectories: $this->inspector->directories($directory, $options->controllerPatterns, options: $options),
+                namespace: $namespace,
+                entityDirectories: $entities,
+                controllerDirectories: $controllers,
                 projectClass: $owner,
             );
         }

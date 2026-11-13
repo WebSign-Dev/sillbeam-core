@@ -30,11 +30,13 @@ final readonly class ArchitectureDiscovery
         $modules = (new ModuleDiscovery($this->inspector))->discover($options, $projects);
         $moduleDirectories = array_values(array_map(static fn ($module): string => $module->directory, $modules));
         foreach ($projects as $class => $project) {
+            [$controllers, $entities] = $this->inspector->directoryGroups(
+                $project->directory, [$options->controllerPatterns, $options->entityPatterns], $moduleDirectories, $options,
+            );
             $projects[$class] = new ProjectDefinition(
                 $project->id, $project->class, $project->description, $project->declaredModules, [],
                 $project->directory, $project->descriptorFile, $project->namespace, [],
-                $this->inspector->directories($project->directory, $options->controllerPatterns, $moduleDirectories, $options),
-                $this->inspector->directories($project->directory, $options->entityPatterns, $moduleDirectories, $options),
+                $controllers, $entities,
             );
         }
         $resources = array_map(static fn (DiscoveryRoot $root): string => $root->path, $options->roots());
