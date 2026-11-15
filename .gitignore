@@ -13,3 +13,6 @@
 /build/docs/
 /.phpdoc/
 /phpdoc.xml
+
+# Local static parse snapshots
+**/var/sillbeam/source-index/

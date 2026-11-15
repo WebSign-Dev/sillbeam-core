@@ -8,6 +8,8 @@ use Sillbeam\Core\Api\CoreDataConfiguration;
 use Sillbeam\Core\Architecture\ArchitectureAnalyzer;
 use Sillbeam\Core\Architecture\ArchitectureReport;
 use Sillbeam\Core\Architecture\DiscoveryOptionsResolver;
+use Sillbeam\Core\Architecture\PersistentSourceIndex;
+use Sillbeam\Core\Architecture\SourceInspector;
 use Sillbeam\Core\DependencyInjection\SillbeamCoreExtension;
 use Sillbeam\Core\I18n\CoreTranslator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -32,7 +34,9 @@ final class KernelArchitectureReporter
     {
         $input = $this->configuration($kernel);
 
-        return ArchitectureReport::fromLocalizedAnalysis((new ArchitectureAnalyzer())->analyze($input->options, $input->config), $input->config, $input->projectDir, $translator);
+        $inspector = new SourceInspector(persistent: new PersistentSourceIndex($input->projectDir));
+
+        return ArchitectureReport::fromLocalizedAnalysis((new ArchitectureAnalyzer($inspector))->analyze($input->options, $input->config), $input->config, $input->projectDir, $translator);
     }
 
     public function configuration(KernelInterface $kernel): CoreDataConfiguration

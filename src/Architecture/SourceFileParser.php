@@ -37,6 +37,12 @@ final class SourceFileParser
         if (false === $contents) {
             throw ArchitectureValidationException::fatalMessage('source.read', new CoreMessage('finding.source.read', ['path' => $path]), ['file' => $path]);
         }
+
+        return $this->parseContents($path, $contents, $inventoryOnly, $collectSymbols);
+    }
+
+    public function parseContents(string $path, string $contents, bool $inventoryOnly, bool $collectSymbols): SourceFile
+    {
         $this->parser ??= (new ParserFactory())->createForNewestSupportedVersion();
         try {
             $nodes = $this->parser->parse($contents) ?? [];

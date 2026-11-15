@@ -23,7 +23,7 @@ final class SourceInspector
     /** @var array<string, list<string>> */
     private array $prunedPaths = [];
 
-    public function __construct(private readonly ?SourceInventoryEvidence $inventory = null, private readonly bool $inventoryOnly = false)
+    public function __construct(private readonly ?SourceInventoryEvidence $inventory = null, private readonly bool $inventoryOnly = false, private readonly ?PersistentSourceIndex $persistent = null)
     {
     }
 
@@ -129,11 +129,12 @@ final class SourceInspector
                 $failures->add(ArchitectureFinding::fromMessage('source.read', new CoreMessage('finding.source.read', ['path' => $directory]), ['file' => $directory], 'fatal'));
             }
         }
+        $snapshot = $this->persistent?->open($options, null !== $this->inventory, $this->inventoryOnly);
         foreach (array_keys($paths) as $path) {
             $contents = null;
             $parsed = null;
             try {
-                if (null !== $this->inventory) {
+                if (null !== $this->inventory || null !== $snapshot) {
                     $bytes = @file_get_contents($path);
                     if (false === $bytes) {
                         throw ArchitectureValidationException::fatalMessage('source.read', new CoreMessage('finding.source.read', ['path' => $path]), ['file' => $path]);
@@ -141,7 +142,9 @@ final class SourceInspector
                     $contents = $bytes;
                 }
                 $extraExtension = 'php' !== pathinfo($path, \PATHINFO_EXTENSION);
-                $parsed = $parser->parse($path, $contents, $extraExtension);
+                $parsed = null !== $snapshot && null !== $contents
+                    ? $snapshot->parse($parser, $path, $contents, $extraExtension, null !== $this->inventory || $extraExtension)
+                    : $parser->parse($path, $contents, $extraExtension);
                 if (!$extraExtension) {
                     $files[$path] = $parsed;
                 }
@@ -171,6 +174,7 @@ final class SourceInspector
             $this->inventory->excluded = array_keys($pruned);
         }
         (new ArchitectureAnalysisResult($failures->all(), cause: $cause))->throwIfInvalid();
+        $snapshot?->publish();
         $this->prunedPaths[$key] = array_values($pruned);
 
         return $this->indexes[$key] = $files;

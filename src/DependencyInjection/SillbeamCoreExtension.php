@@ -21,6 +21,7 @@ use Sillbeam\Core\Architecture\DiscoveryOptionsResolver;
 use Sillbeam\Core\Architecture\DiscoveryRoot;
 use Sillbeam\Core\Architecture\FilesystemPath;
 use Sillbeam\Core\Architecture\PathMatcher;
+use Sillbeam\Core\Architecture\PersistentSourceIndex;
 use Sillbeam\Core\Architecture\SourceInspector;
 use Sillbeam\Core\Console\Doctor\DoctorCommand;
 use Sillbeam\Core\Console\LocaleCommand;
@@ -215,7 +216,8 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
     private function analyze(array $configs, array $config, ContainerBuilder $container): void
     {
         $this->options = (new DiscoveryOptionsResolver())->resolve($container, $configs, $config);
-        $this->inspector = new SourceInspector();
+        $projectDir = $container->getParameter('kernel.project_dir');
+        $this->inspector = new SourceInspector(persistent: \is_string($projectDir) ? new PersistentSourceIndex($projectDir) : null);
         $this->analysis = (new ArchitectureAnalyzer($this->inspector))->analyze($this->options, $config);
     }
 

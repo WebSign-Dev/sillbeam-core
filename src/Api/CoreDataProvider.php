@@ -7,6 +7,7 @@ namespace Sillbeam\Core\Api;
 use Sillbeam\Core\Architecture\ArchitectureAnalysisResult;
 use Sillbeam\Core\Architecture\ArchitectureAnalyzer;
 use Sillbeam\Core\Architecture\ArchitectureDiscovery;
+use Sillbeam\Core\Architecture\PersistentSourceIndex;
 use Sillbeam\Core\Architecture\SourceInspector;
 use Sillbeam\Core\Architecture\SourceInventoryEvidence;
 
@@ -51,7 +52,7 @@ final readonly class CoreDataProvider implements CoreDataProviderInterface
                 $inputs = new SnapshotInputs($input->projectDir, $this->kernelFile);
             }
             $started = hrtime(true);
-            $result = (new ArchitectureAnalyzer(new SourceInspector(inventory: $inventory)))->analyze($input->options, $input->config);
+            $result = (new ArchitectureAnalyzer(new SourceInspector(inventory: $inventory, persistent: new PersistentSourceIndex($input->projectDir))))->analyze($input->options, $input->config);
         } catch (\Throwable $error) {
             $failure = $error::class;
             $result = new ArchitectureAnalysisResult();
@@ -73,7 +74,7 @@ final readonly class CoreDataProvider implements CoreDataProviderInterface
         } catch (\Throwable) {
             return (new SourceInventory(static fn (string $path): ?string => null))->project(null, null, $evidence);
         }
-        $inspector = new SourceInspector(inventory: $evidence, inventoryOnly: true);
+        $inspector = new SourceInspector(inventory: $evidence, inventoryOnly: true, persistent: new PersistentSourceIndex($input->projectDir));
         $discovery = null;
         try {
             $discovery = (new ArchitectureDiscovery($inspector))->discover($input->options);

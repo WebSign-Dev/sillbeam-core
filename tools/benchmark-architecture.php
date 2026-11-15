@@ -208,7 +208,7 @@ foreach ($smoke ? [2] : [10, 50, 100] as $count) {
                             }
                         }
                         $expectsAnalysis = 'sillbeam' === $variant && in_array($metric, ['build_cold', 'cache_clear', 'build_rebuild', 'cache_warmup_cold', 'architecture'], true);
-                        if ($expectsAnalysis !== $sample['analyzer_loaded'] || $expectsAnalysis !== $sample['parser_loaded']) {
+                        if ($expectsAnalysis !== $sample['analyzer_loaded'] || (!$expectsAnalysis && $sample['parser_loaded'])) {
                             throw new RuntimeException('Unexpected source analysis state for '.$variant.' '.$environment.' '.$metric);
                         }
                         $results[$variant]['analysis_loaded'][$metric] = $sample['analyzer_loaded'];

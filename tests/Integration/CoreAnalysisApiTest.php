@@ -273,6 +273,9 @@ final class CoreAnalysisApiTest extends TestCase
             self::assertSame(\Sillbeam\Core\Api\CoreCapabilitiesProvider::coreVersion(), $first['metadata']['core_version']);
             self::assertMatchesRegularExpression('/^sha256:v2:[0-9a-f]{64}$/', $first['metadata']['architecture_fingerprint']);
             self::assertSame($first['metadata']['architecture_fingerprint'], $second['metadata']['architecture_fingerprint']);
+            foreach (['architecture', 'diagnostics', 'references', 'graph', 'source_inventory', 'completeness'] as $section) {
+                self::assertSame($first[$section], $second[$section], $section);
+            }
             self::assertNotSame($first['metadata']['analysis_run_id'], $second['metadata']['analysis_run_id']);
             $source->write('config/packages/sillbeam.yaml', 'sillbeam: { modules: { a: { enabled: false } } }');
             [, $third] = $this->snapshot($source);
