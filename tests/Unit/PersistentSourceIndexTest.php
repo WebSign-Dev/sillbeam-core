@@ -38,9 +38,11 @@ final class PersistentSourceIndexTest extends TestCase
             self::assertIsInt($mtime);
             $source->php('src/Module/A.php', 'final class B {}');
             touch($path, $mtime);
-            self::assertSame([$source->namespace.'\\Module\\B'], $inspect()[$path]->classes);
+            $updated = $inspect();
+            self::assertSame([$source->namespace.'\\Module\\B'], $updated[$path]->classes);
             file_put_contents($cache[0], '{bad');
-            self::assertSame([$source->namespace.'\\Module\\B'], $inspect()[$path]->classes);
+            $recovered = $inspect();
+            self::assertSame([$source->namespace.'\\Module\\B'], $recovered[$path]->classes);
             $source->php('src/Module/A.php', 'invalid PHP !!!');
             try {
                 $inspect();
