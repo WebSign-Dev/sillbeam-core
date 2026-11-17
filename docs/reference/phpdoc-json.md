@@ -24,7 +24,7 @@ from architecture-report JSON and Doctor JSON.
 {
   "schema_version": 1,
   "package": "websign-dev/sillbeam-core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "language": "en",
   "elements": []
 }

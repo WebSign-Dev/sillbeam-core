@@ -1,9 +1,11 @@
 # Symfony Flex
 
 Use the [getting-started guide](getting-started.md) for the complete Composer →
-Console adapter → Doctor → first `/hello` module path for 0.3.0. The compatible
-recipe source for the upcoming Contrib submission is [flex-recipe/websign-dev/sillbeam-core/0.3](https://github.com/WebSign-Dev/sillbeam-core/blob/main/flex-recipe/README.md):
-`0.3` is its minimum recipe version, not a separate installation system.
+Console adapter → Doctor → first `/hello` module path. The compatible
+[recipe source](https://github.com/WebSign-Dev/sillbeam-core/blob/main/flex-recipe/README.md)
+is kept under `flex-recipe/websign-dev/sillbeam-core/0.3`. The directory names
+the minimum Core version for that recipe. Core v0.4.0 uses the same
+bundle and route registration.
 
 The manifest performs two tasks when the developer installs this recipe:
 
@@ -20,11 +22,11 @@ A preserved but incorrect route file still needs manual correction.
 ## Package installation and recipe availability
 
 ```bash
-composer require websign-dev/sillbeam-core
+composer require websign-dev/sillbeam-core:^0.4.0
 ```
 
-This installs an available compatible package version. For 0.3.0 release consumers,
-use `:^0.3.0`. Public recipe installation additionally requires
+For an existing 0.3 installation, follow the [upgrade guide](../migration/0.4.0.md).
+Public recipe installation requires
 Contrib approval, an eligible recipe on the configured endpoint, permission for
 the Flex plugin and the application's decision to allow Contrib recipes
 (`composer config extra.symfony.allow-contrib true`). None of these is implied by

@@ -137,15 +137,15 @@ JSON fields and compatibility note in [CLI reporting](cli.md).
 - `fatal`: source or ownership/identity ambiguity makes subsequent checks unreliable. All independently parseable files are examined for parse/read/attribute failures first; if any fail, discovery does not continue. Discovery-area ambiguities stop discovery. Identity failures still permit independent declared-dependency and cycle checks, but prevent ambiguous configuration/activation and code analysis. Duplicate symbols stop code analysis. Earlier findings are preserved.
 - Only expected parser, descriptor and discovery failures are converted. Arbitrary exceptions from application descriptor execution and internal programming errors propagate. Configuration/option resolution before the analyzer retains its existing Symfony/PHP exceptions.
 
-Findings are sorted by rule, file, numeric line and canonical remaining context, then severity/message. Context keys are sorted before deduplication; identical rule/severity/message/context tuples appear once. Repeated references to the same PHP symbol on the same source line are deduplicated case-insensitively. Separate source lines and separate rule violations remain distinct. Cycle checks traverse sorted classes/dependencies and report detected cycles without enumerating every possible path. Default analyzer instances use fresh source indexes and collectors on each run.
+Findings are sorted by rule, file, numeric line and canonical remaining context, then severity/message. Context keys are sorted before deduplication; identical rule/severity/message/context tuples appear once. Repeated references to the same PHP symbol on the same source line are deduplicated case-insensitively. Separate source lines and separate rule violations remain distinct. Cycle checks traverse sorted classes/dependencies and report detected cycles without enumerating every possible path. Each analysis collects its own findings and can reuse static parse results from the persistent source index.
 
 ## Strict entry points and compatibility
 
-The bundle's container build now uses the same analyzer and throws `ArchitectureValidationException` containing the complete available result in `$exception->result`. The exception extends `LogicException`, preserving existing catches and descriptive message fragments. Its message contains one `[rule] description` per finding; fatal parser/descriptor causes are retained through `getPrevious()`.
+`ArchitectureAnalysisResult::throwIfInvalid()` throws an `ArchitectureValidationException` containing the available result in `$exception->result`. The exception extends `LogicException`. Its message contains one `[rule] description` per finding, and fatal parser or descriptor causes are available through `getPrevious()`. Symfony uses the same analyzer and handles returned findings as described below.
 
 `ArchitectureCompiler::compile()` and `CodeDependencyAnalyzer::analyze()` remain strict and aggregate their own findings before rejecting invalid input. The `collect()` methods and mutable collector are internal implementation details; candidate graphs from them must not be used at runtime.
 
-The shared result also powers [CLI architecture reporting](cli.md), including the entry point that works without a compiled container. CLI names, configuration alias, services, routing and Doctrine behavior remain unchanged.
+The shared result also powers [CLI architecture reporting](cli.md), including the entry point that works without a compiled container. Valid graphs continue to drive automatic services, routing and Doctrine mappings.
 
 ## Development and production lifecycle
 
@@ -173,3 +173,13 @@ APP_ENV=prod APP_DEBUG=0 php bin/console sillbeam:architecture --format=json
 ```
 
 Require a successful cache build and a successful explicit architecture check before switching traffic. A successful cache command can leave Core integration deferred. After repair, rebuild the container to restore module services, routes and mappings. Use a fresh build directory for each release because warm non-debug containers retain their compiled state.
+
+## Source index and cache invalidation
+
+Core can reuse a per-project JSON source index in `<project>/var/sillbeam/source-index`. The index stores static PHP parse results such as symbol names and references. Analysis still resolves descriptor metadata, evaluates rules and constructs the runtime graph. An entry can be reused only when its format and source digest match. Changing the discovery options, collection mode, PHP/parser settings or relevant parser and Core versions selects a separate snapshot.
+
+The directory must be private to the project user. Core bypasses persistent storage when the cache path is unsuitable, for example when a cache path component is a symlink or when the cache would fall inside a scanned root. Missing, invalid and oversized snapshots fall back to parsing source, including snapshots that exceed the decode budget of the PHP process. A usable snapshot can still be read without write access. Successful writes replace a snapshot via a temporary file and rename. Source digests detect changes to the parsed input. Treat the writable directory as trusted because a digest does not authenticate the index contents.
+
+Symfony tracks source files, directories and configuration at build time using its debug cache freshness rules. File edits and changes to discovered directory contents can invalidate the compiled cache. Use an explicit cache rebuild when changes preserve timestamps or when deploying with debug disabled. The persistent index lives outside Symfony's default `var/cache` directory, so `cache:clear` can rebuild the container while reusing compatible parse entries. Core can recreate the index after it is deleted with builds stopped.
+
+PHP keeps loaded descriptor classes in memory. When Core sees a changed descriptor it previously inspected in the same process, it reports that the descriptor must be reloaded. Start a fresh PHP process after updating descriptors or deploying code to long-lived workers. Filesystem consistency checks in the Analysis API can identify concurrent changes and report a partial snapshot. Run it against a stable tree when you need complete evidence.

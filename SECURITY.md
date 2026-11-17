@@ -7,9 +7,9 @@ Sillbeam Core provides security fixes for the current Core release line on a bes
 
 | Version | Supported |
 |---------|-----------|
-| v0.3.x (release candidate; not yet approved/published) | Best-effort fixes during acceptance |
-| v0.2.x (preceding Core release line) | ✅ until 0.3.0 is approved |
-| v0.1.x and older | ❌ |
+| v0.4.x | Best-effort security fixes for the 0.4 release line |
+| v0.3.x | Best-effort security fixes until v0.4.0 is published |
+| v0.2.x and older | Unsupported |
 
 No long-term security support or guaranteed maintenance period is provided.
 
@@ -61,6 +61,13 @@ Sillbeam does **not** provide:
 Modules and Projects share the underlying Symfony application runtime, service container, and infrastructure.
 
 Applications remain responsible for their own security configuration, access controls, data protection, and production secrets.
+
+Treat the Symfony build cache and `var/sillbeam/source-index` as trusted local
+storage. Keep the index directory and its parents protected from untrusted writers.
+Its checksums detect corruption. Review Core Data exports before sharing them.
+Caller-supplied text, file paths and legacy diagnostic context can contain
+sensitive information. See the [cache reference](docs/reference/architecture-analysis.md#source-index-and-cache-invalidation)
+and [Core Data contract](docs/reference/core-data/API_CONTRACT.md).
 
 ## General Support
 

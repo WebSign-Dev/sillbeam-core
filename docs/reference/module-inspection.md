@@ -1,4 +1,4 @@
-# Targeted module inspection (0.3.0)
+# Targeted module inspection
 
 ```bash
 php bin/console sillbeam:inspect:module Billing
@@ -193,7 +193,7 @@ applicable Project host issues. No additional architecture rule is introduced.
 | 1 | Selection succeeded but the whole analysis has architecture violations. |
 | 2 | Invalid usage, unknown/ambiguous module or Project, execution failure or incomplete/unavailable analysis. |
 
-For 0.3.0 this is **text only**. There is no `--format` option or JSON inspection
+This command is **text only**. There is no `--format` option or JSON inspection
 mode. `--quiet` suppresses text without changing the exit code. `--help` describes
 usage without running the report provider in the Core adapter.
 

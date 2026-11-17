@@ -7,15 +7,13 @@
 <div align="center">
 
 [![Composer][composer-shield]][composer-url]
-[![CI][ci-shield]][ci-url]
 [![PHP][php-shield]](#requirements)
 [![Symfony][symfony-shield]](#requirements)
-[![Status][status-shield]](#install-with-composer)
 [![License][license-shield]](LICENSE)
 
 **A modular architecture layer for scalable, maintainable Symfony applications.**
 
-[Website](https://getsillbeam.websign.de/) · [Quick start](#quick-start) · [Documentation](docs/README.md) · [Release notes](docs/releases/0.3.0.md) · [Report an issue][issues-url]
+[Website](https://getsillbeam.websign.de/) · [Quick start](#quick-start) · [Documentation](docs/README.md) · [v0.4.0 release notes](docs/releases/0.4.0.md) · [Report an issue][issues-url]
 
 </div>
 
@@ -42,26 +40,26 @@ Modules normally live in `src/Module`; Projects live in `src/Project`. These def
 
 ### Requirements
 
-- **PHP 8.4 or newer** and Composer.
-- **Symfony 7.4 or 8.x** in the consuming application.
+- **PHP** `^8.4` and **Composer runtime API** `^2.2`.
+- **Symfony** components `^7.4 || ^8.0` in the consuming application.
 - **DoctrineBundle**, only if you want automatic Doctrine entity mappings.
 
-The current CI targets PHP 8.4/8.5 with Symfony 7.4/8.1. The [independent v0.2.0 acceptance](https://github.com/WebSign-Dev/sillbeam-core/blob/3f891afbff43a0ab48af4ec5991f19aa59fe80b0/docs/development/installation-acceptance-2026-10-25/INSTALLATIONS-ABNAHME.md) records its exact tested versions and historical limitations; the [F01/F02 follow-up](https://github.com/WebSign-Dev/sillbeam-core/blob/3f891afbff43a0ab48af4ec5991f19aa59fe80b0/docs/development/doctor-f01-f02-verification-2026-10-25/README.md) documents the subsequent Doctor corrections. The original report is not an unconditional release approval. Earlier compatibility snapshots describe their own historical scope.
+Local v0.4.0 verification covered PHP 8.4 and 8.5 with Symfony 7.4 and 8.1.
+Symfony 8.0 could not be resolved with Composer advisory blocking enabled.
+See the [tested patch versions and verification scope](docs/releases/0.4.0.md#compatibility-and-scope).
 
 ### Install with Composer
 
 From the root of a fresh or existing Symfony application:
 
 ```bash
-composer require websign-dev/sillbeam-core
+composer require websign-dev/sillbeam-core:^0.4.0
 ```
 
-Composer selects an available compatible release. This checkout prepares **v0.3.0**;
-a `:^0.3.0` constraint requires that release to be published. See
-[release status](#release-status). Package installation and Flex recipe availability
-are separate. The [existing Flex recipe](https://github.com/WebSign-Dev/sillbeam-core/blob/main/flex-recipe/README.md) registers the bundle
-and one route import when installed through your configured endpoint; it does not
-edit `bin/console` or `services.yaml`. Public Contrib approval is a separate step.
+For an existing 0.3 installation, follow the [upgrade guide](docs/migration/0.4.0.md).
+The [Flex recipe](docs/guides/flex-recipe.md) registers the bundle and one route
+import when available through your configured endpoint. Package availability and
+public recipe availability are separate. The following steps cover manual setup.
 
 Before running Doctor, select the Core Application in your **existing** `bin/console`:
 
@@ -114,8 +112,8 @@ php bin/console debug:router hello
 A request to `/hello` through your existing development server returns
 `Hello from Sillbeam`. The descriptor command alone creates no route. Existing
 Projects must select the shared Hello module first; Project routes have prefixed
-names and optional host filters. Ordinary make/container commands require a usable
-architecture; the adapter keeps Doctor and reporting available before boot.
+names and optional host filters. The Core Console adapter provides Doctor and
+fresh architecture reporting before boot.
 
 ## Modules and Projects
 
@@ -138,23 +136,34 @@ Read the [module guide](docs/guides/modules.md) and [Project guide](docs/guides/
 
 ## Everyday workflow
 
-Run these commands from your Symfony application's root:
+Run these commands from your Symfony application's root. The Core Data and
+locale commands shown here were introduced in v0.4.0.
 
 | Command | Purpose |
 | :--- | :--- |
 | `php bin/console sillbeam:architecture` | Explain architecture findings and contextual next steps. |
-| `php bin/console sillbeam:graph` | Write `architecture.svg` directly in PHP (no extra tools); use `--module=Billing` for direct relationships or `--format=mermaid` for raw source ([reference](docs/reference/mermaid-graph.md)). |
+| `php bin/console sillbeam:graph` | Write `architecture.svg` with the native Graph 2.0 layout in v0.4.0. Use `--module=Billing` for direct relationships or `--format=mermaid` for raw source ([reference](docs/reference/mermaid-graph.md)). |
 | `php bin/console sillbeam:inspect:module Billing` | Inspect module state and merged direct relationships; use `-v` for technical evidence ([reference](docs/reference/module-inspection.md)). |
 | `php bin/console sillbeam:doctor` | Inspect static installation evidence; review unverified checks manually. |
 | `php bin/console sillbeam:doctor --format=json` | Export the [versioned Doctor result](docs/reference/doctor-json.md) with stable check IDs. |
 | `php bin/console sillbeam:architecture --format=json` | Export the architecture catalog and dependency evidence. |
+| `php bin/console sillbeam:api --profile=live --locale=de` | Export architecture, diagnostics and references in one locale. |
+| `php bin/console sillbeam:api --profile=analysis` | Add structured graph data, source inventory, Doctor results and both locales. |
+| `php bin/console sillbeam:locale --set=de` | Set the personal default for human-readable CLI output. |
 | `php bin/console sillbeam:report` | Write a standalone Markdown architecture report. |
 | `php bin/console sillbeam:about` | Show application, runtime and module information. |
 | `php bin/console debug:container` | Inspect Symfony service registration. |
 | `php bin/console debug:router` | Inspect imported application routes. |
 | `php bin/console doctrine:mapping:info` | Inspect entity mappings when DoctrineBundle is installed. |
 
-Architecture errors block ordinary container-backed commands. With `Sillbeam\Core\Console\Application` selected in the existing bootstrap, the exact architecture, report, module-inspection, graph and Doctor commands remain available before container compilation. Doctor recognizes conventional Runtime callbacks and stock Symfony 7.4/8.1 kernels statically; dynamic or ambiguous configuration remains `not verified`. Unknown routing does not hide independently proven service-import conflicts. The regular Symfony entry point can write cache files before Doctor runs. See the [CLI reference](docs/reference/cli.md) and [troubleshooting guide](docs/operations/troubleshooting.md).
+In v0.4.0, invalid architecture defers Core's automatic runtime integration
+while Symfony cache maintenance can proceed. Before routing production traffic
+to a release, require successful cache preparation and a successful explicit
+architecture check through the Core Console adapter. Doctor checks installation
+evidence statically and reports dynamic or ambiguous configuration as
+`not verified`. See the [CLI reference](docs/reference/cli.md),
+[lifecycle and cache behavior](docs/reference/architecture-analysis.md#development-and-production-lifecycle)
+and [troubleshooting guide](docs/operations/troubleshooting.md).
 
 ## Documentation
 
@@ -167,39 +176,30 @@ Architecture errors block ordinary container-backed commands. With `Sillbeam\Cor
 | [Projects](docs/guides/projects.md) | Shared and private modules, hosts and request context. |
 | [Configuration](docs/reference/configuration.md) | Discovery roots, exclusions and integration settings. |
 | [Public API](docs/reference/public-api.md) | Attributes, registries and runtime interfaces. |
+| [Core Data API v1](docs/reference/core-data/README.md) | Live, Analysis, capabilities, source inventory and versioned JSON schemas. |
 | [English API JSON](docs/reference/phpdoc-json.md) | Manually export English API JSON with `composer docs:export-json`; translation and integration are separate manual work. |
 | [Doctrine](docs/modules/doctrine.md) | Optional entity mapping integration. |
-| [Migration](docs/migration/modular-monolith.md) | Breaking changes and replacing the former Foundation features. |
+| [Upgrade from v0.3.0](docs/migration/0.4.0.md) | Package, CLI and deployment steps for v0.4.0. |
 | [Testing](CONTRIBUTING.md#run-the-checks) | Repository checks and integration coverage. |
 | [Test applications](https://github.com/WebSign-Dev/sillbeam-core/blob/3f891afbff43a0ab48af4ec5991f19aa59fe80b0/docs/development/test-apps.md) | Example layouts and the isolated consumer application. |
 
 ## Release status
 
-Sillbeam Core **v0.3.0 is prepared for release acceptance**, based on v0.2.0. It adds English PHPDoc/API documentation and manual JSON export, clearer installation guidance, Doctor JSON v1, compact module inspection and built-in SVG diagrams with explicit Mermaid source export. See the [changelog](CHANGELOG.md), [release notes](docs/releases/0.3.0.md), [upgrade guide](docs/migration/0.3.0.md) and [initial acceptance evidence (2026-10-29)](https://github.com/WebSign-Dev/sillbeam-core/blob/3f891afbff43a0ab48af4ec5991f19aa59fe80b0/docs/development/release-0.3.0-acceptance/README.md).
+See the v0.4.0 [release notes](docs/releases/0.4.0.md),
+[changelog](CHANGELOG.md) and [upgrade guide](docs/migration/0.4.0.md).
+The [v0.3.0 release notes](docs/releases/0.3.0.md) and
+[v0.3.0 upgrade guide](docs/migration/0.3.0.md) remain available for the published line.
 
-This checkout does not establish publication or final approval. A stable `:^0.3.0` installation requires the matching approved tag/version to become available through Packagist. Composer derives release versions from Git tags; no fixed package `version` field is added. The current development branch is `dev-v0.3.x`. Composer aliases `dev-dev-v0.3.x`,
-`dev-dev` and `dev-main` to `0.3.x-dev`; these are development versions, not a stable
-0.3.0 release. Composer adds `dev-` to each non-numeric Git branch name. Each
-alias applies when this metadata is present on its named branch.
-
-The integration order is **`dev-v0.3.x` → `dev` (automatic CI) → maintainer approval
-→ `main` (automatic CI) → explicitly authorized release**. Push CI runs only for
-`main` and `dev`; this development branch and pull requests do not trigger it.
-Manual workflow dispatch remains available. Configured CI and historical local
-results do not establish a current remote run; see the
-[verification scope](docs/releases/0.3.0.md#verification-scope-and-release-flow).
-
-The compatible [Flex recipe](https://github.com/WebSign-Dev/sillbeam-core/blob/main/flex-recipe/README.md) is prepared under `0.3/` for the Contrib submission. Its public availability is separate from the package release; manual integration remains supported. No tag, push, Packagist publication or Recipes Contrib submission is performed by the acceptance checks. Final release authorization belongs to the maintainer.
-
-The [v0.2 migration guide](docs/migration/0.2.0.md) remains the historical guide for the earlier package/namespace rename. Historical reports retain their original findings and scope.
-
-For reports even when the service container cannot compile, use `Sillbeam\Core\Console\Application` in the existing `bin/console` bootstrap. See [CLI reporting](docs/reference/cli.md) for setup, JSON schema and exit codes.
+Check [Packagist][composer-url] for installable versions and
+[GitHub Releases][releases-url] for release history. Composer derives stable
+versions from Git tags. Existing `^0.3.0` requirements stay on the 0.3 line.
 
 ## Scope and migration
 
 Sillbeam focuses on module architecture within Symfony. Services, HTTP handling and runtime behavior use Symfony's existing mechanisms. Applications supply their own business functionality and infrastructure integrations.
 
-The former Foundation layer—including API, Security, User, entity bases, stores and infrastructure helpers—has been removed. This is a **breaking change**: replace existing usage according to the [migration guide](docs/migration/modular-monolith.md) before updating. Strata remains a future idea and is not a dependency.
+Applications upgrading from the former Foundation layer should follow the
+[historical migration guide](docs/migration/modular-monolith.md).
 
 ## Development & support
 
@@ -239,12 +239,9 @@ Sillbeam is licensed under the [MIT License](LICENSE).
 [issues-url]: https://github.com/WebSign-Dev/sillbeam-core/issues
 [releases-url]: https://github.com/WebSign-Dev/sillbeam-core/releases
 [composer-url]: https://packagist.org/packages/websign-dev/sillbeam-core
-[ci-url]: https://github.com/WebSign-Dev/sillbeam-core/actions/workflows/ci.yml
 
-<!-- Badges: repository CI and requirements from composer.json -->
+<!-- Badges: package version and compatibility -->
 [composer-shield]: https://img.shields.io/packagist/v/websign-dev/sillbeam-core?label=Composer&logo=composer&logoColor=white
-[ci-shield]: https://github.com/WebSign-Dev/sillbeam-core/actions/workflows/ci.yml/badge.svg
-[php-shield]: https://img.shields.io/badge/PHP-%E2%89%A5%208.4-777bb4?logo=php&logoColor=white
-[symfony-shield]: https://img.shields.io/badge/Symfony-7.4%20%7C%208.x-000000?logo=symfony&logoColor=white
-[status-shield]: https://img.shields.io/badge/status-v0.3.0_candidate-57606a
+[php-shield]: https://img.shields.io/badge/PHP-%5E8.4-777bb4?logo=php&logoColor=white
+[symfony-shield]: https://img.shields.io/badge/Symfony-7.4%20%7C%208.1-000000?logo=symfony&logoColor=white
 [license-shield]: https://img.shields.io/badge/license-MIT-57606a

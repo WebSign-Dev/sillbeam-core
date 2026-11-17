@@ -4,6 +4,7 @@ Without a package configuration file, the same defaults apply as for `sillbeam: 
 
 ```yaml
 sillbeam:
+    locale: en
     discovery:
         root: '%kernel.project_dir%/src'
         namespace: 'App\'
@@ -35,7 +36,7 @@ sillbeam:
 
 Multiple configuration files are merged according to Symfony rules: root, exclusion and integration lists are appended; an explicit entry replaces the corresponding default. An empty list removes the default but does not delete entries from earlier configuration files.
 
-Without specified lists, Module roots are `src/Module` and Project roots are `src/Project`. An empty list removes the corresponding default. Explicit roots must exist and Composer autoloading must be able to load their namespaces. Identical paths with conflicting namespaces are errors. The source root remains monitored as well; descriptors outside permitted boundaries are reported.
+Without specified lists, Module roots are `src/Module` and Project roots are `src/Project`. These conventional directories may be absent. An empty list removes the corresponding default. Explicit roots must exist and Composer autoloading must be able to load their namespaces. A missing required root that reaches analysis is reported as `source.read`. Identical paths with conflicting namespaces are errors. The source root remains monitored as well, and descriptors outside permitted boundaries are reported.
 
 Patterns use `/`, `*` (one segment), `**` (recursive) and `?`. Global exclusions are relative to the source root or absolute; local exclusions are relative to their root. Exclusions apply to discovery and automatic service, route and entity imports. Controller/entity patterns select directories relative to the descriptor area. Defaults: `Controller`, `**/Controller` and `Entity`, `**/Entity`.
 
@@ -47,7 +48,11 @@ Activation options can use `%env(bool:...)%`. They are resolved at build time. R
 
 Former Foundation keys such as `api`, `security`, `user` or `management` are invalid; see [Migration](../migration/modular-monolith.md).
 
-Project hosts are exact, trimmed hostnames without scheme, port, path or wildcard; case is normalized. IDs match `[a-z][a-z0-9-]*`. Unknown Module/Project configuration addresses are build errors.
+Project hosts are exact, trimmed hostnames without scheme, port, path or wildcard; case is normalized. IDs match `[a-z][a-z0-9-]*`. Unknown Module or Project configuration addresses produce architecture findings and defer Core runtime integration during container compilation.
+
+`locale` sets the project's language for human-readable output. Supported values are `en` (default) and `de`. A personal preference or an explicit CLI locale can override it. Machine-readable profiles follow their own language rules. See [CLI locale selection](cli.md#locale-configuration) and the [Core Data contract](core-data/README.md).
+
+See [source index and cache invalidation](architecture-analysis.md#source-index-and-cache-invalidation) for persistent cache placement, Symfony rebuilds and long-lived PHP processes.
 
 ## Configuration prepended by other bundles
 

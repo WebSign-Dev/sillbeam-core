@@ -11,7 +11,7 @@ Search [existing issues](https://github.com/WebSign-Dev/sillbeam-core/issues) be
 - Expected behavior, actual behavior and the complete relevant error message.
 - Architecture diagnostic output when the container can boot.
 
-Remove credentials and private application data from shared configuration and logs. For larger features or changes to the public API, open an issue to discuss the intended behavior before implementation. The [release notes](docs/releases/0.3.0.md) describe the current scope and limitations. Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+Remove credentials and private application data from shared configuration and logs. For larger features or changes to the public API, open an issue to discuss the intended behavior before implementation. The [release notes](docs/releases/0.4.0.md) describe the current scope and limitations. Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ## Set up a development checkout
 
@@ -20,12 +20,12 @@ Use PHP 8.4 or newer, Composer and the PHP extensions required by the locked dep
 ```bash
 git clone https://github.com/WebSign-Dev/sillbeam-core.git
 cd sillbeam-core
-git switch dev-v0.3.x
+git switch dev-v0.4.x
 composer install
 ```
 
 If contributing through a fork, clone your fork instead. The current development
-line is `dev-v0.3.x`; base focused work on that line and follow the integration flow
+line is `dev-v0.4.x`; base focused work on that line and follow the integration flow
 below. There is no automatic CI push run on this development branch.
 
 The six example application variants and the main fixtures use the root Composer autoloader. You do not need to start an external runtime to run the root test suite. The separate consumer under `apps/test-app` has its own dependencies and runtime; see the [test-app guide](https://github.com/WebSign-Dev/sillbeam-core/blob/3f891afbff43a0ab48af4ec5991f19aa59fe80b0/docs/development/test-apps.md).
@@ -126,8 +126,8 @@ composer install
 composer docs:build
 ```
 
-Open `build/docs/api/index.html` in a browser. `phpdoc.dist.xml` labels the existing
-contracts for the 0.3.0 documentation release and scans only `src/`. It renders public
+Open `build/docs/api/index.html` in a browser. `phpdoc.dist.xml` scans `src/`.
+The build renders public
 and protected members of non-internal types; `@internal` classes/members are omitted.
 Check that changed API contracts appear, their parameter/return types and exceptions
 are readable, navigation links work, and internal service pages are absent.
@@ -170,7 +170,7 @@ command, with no translation, website integration, release hook or new CI trigge
 
 ## Submit a pull request
 
-Target **`dev`** when integrating the `dev-v0.3.x` development line. Describe:
+Target **`dev`** when integrating the `dev-v0.4.x` development line. Describe:
 
 - The concrete problem and the behavior after the change.
 - Relevant reproduction steps or examples.
@@ -183,7 +183,7 @@ Maintainers may request revisions before integration.
 
 The required promotion sequence is:
 
-1. Work on `dev-v0.3.x` and open the integration PR to `dev`.
+1. Work on `dev-v0.4.x` and open the integration PR to `dev`.
 2. An authorized integration/push to `dev` runs automatic CI; verify its results.
 3. Obtain maintainer approval before promoting the checked integration to `main`.
 4. An authorized integration/push to `main` runs automatic CI again.

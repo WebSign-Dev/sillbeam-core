@@ -3,7 +3,9 @@
 Use this path for a fresh or existing Symfony application: install with Composer,
 select the existing Core Console adapter, run Doctor, review the native Symfony
 integration, then create a working module. Keep your Symfony kernel and existing
-configuration. Sillbeam requires PHP 8.4+ and Symfony 7.4 or 8.x; Doctrine is optional.
+configuration. Sillbeam declares PHP `^8.4` and Symfony components `^7.4 || ^8.0`.
+The [local test matrix](../releases/0.4.0.md#compatibility-and-scope)
+covers Symfony 7.4 and 8.1. Doctrine is optional.
 The application must have a Composer PSR-4 mapping such as `"App\\": "src/"`.
 The examples use those default directories and namespace. PHP files below start with `<?php`.
 
@@ -12,25 +14,22 @@ The examples use those default directories and namespace. PHP files below start 
 From the Symfony application's root:
 
 ```bash
-composer require websign-dev/sillbeam-core
+composer require websign-dev/sillbeam-core:^0.4.0
 ```
 
-Composer selects an available release compatible with the application. This guide
-prepares the 0.3.0 onboarding flow; use `:^0.3.0` when that release is published.
-Package installation does not prove that the Flex recipe ran. Inspect the Composer
-output and `symfony.lock`; recipe availability depends on the configured endpoint
-and Contrib approval. This checkout does not publish a version or a recipe.
-See [release status](../../README.md#release-status) and the [Flex guide](flex-recipe.md).
-Development consumers can use this checkout through a local Composer path repository;
-the repository's Flex acceptance test uses a simulated 0.3.0 version, not a public tag.
+For an existing 0.3 installation, follow the [upgrade guide](../migration/0.4.0.md).
+Check the Composer output and `symfony.lock` to verify that the recipe ran.
+Recipe availability depends on the configured endpoint. See
+[release status](../../README.md#release-status) and the [Flex guide](flex-recipe.md).
 
-Core architecture findings allow Composer's cache auto-scripts to proceed with Core
-runtime integration deferred. If Symfony still cannot compile the application, correct
-that reported error or repeat the require command with `--no-scripts` to defer
-application scripts. After the manual corrections below, rerun the application's
-normal Composer auto-scripts (typically `composer run-script post-update-cmd`) and
-its cache build. Do not force recipe installation or replace native files to get
-past a boot error.
+With v0.4.0, Core architecture findings allow Symfony cache maintenance to
+proceed with Core runtime integration deferred. If Symfony still cannot compile
+the application, correct the reported error or repeat the require command with
+`--no-scripts` to defer application scripts. After the manual corrections below,
+rerun the application's Composer auto-scripts (typically
+`composer run-script post-update-cmd`), build its cache and run the explicit
+architecture check. Keep native files and existing Flex imports when repairing
+the integration.
 
 ## 2. Make Doctor available before boot
 
@@ -239,9 +238,9 @@ text selectors. Exit codes are 0 (valid), 1 (violations), and 2 (unavailable,
 invalid usage, or report write failure). `unavailable` means analysis is incomplete;
 correct the blocker and check again.
 
-To use reporting even when invalid architecture prevents container compilation,
-replace the Console Application import in your existing `bin/console` with
-`use Sillbeam\Core\Console\Application;`, preserving the bootstrap and kernel.
-The adapter runs these exact reporting commands without booting the container.
+For fresh reporting, select `Sillbeam\Core\Console\Application` as shown in
+[step 2](#2-make-doctor-available-before-boot). The adapter runs the exact
+reporting commands before container boot. Core v0.4.0 also offers
+[Core Data exports](../reference/core-data/README.md) for machine consumers.
 See [architecture checking and reports](architecture-reporting.md) for the full
 adapter example, option combinations and failure boundaries.

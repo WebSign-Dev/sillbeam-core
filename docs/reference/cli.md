@@ -1,4 +1,4 @@
-# CLI and architecture reporting (0.3.0)
+# CLI and architecture reporting
 
 ```bash
 php bin/console sillbeam:architecture
@@ -100,6 +100,19 @@ existing contract. Live defaults to English independently of CLI preferences.
 Analysis includes both languages and rejects a locale selection. The
 capabilities and source-inventory JSON are locale-independent. The CLI preference
 can still localize the help and human-readable errors of the JSON commands.
+
+## Core Data commands
+
+With the Core console adapter enabled, run these commands for versioned JSON on STDOUT.
+
+```bash
+php bin/console sillbeam:api --profile=live --locale=de --schema-version=1
+php bin/console sillbeam:api --profile=analysis --schema-version=1
+php bin/console sillbeam:api:capabilities --format=json
+php bin/console sillbeam:inspect:sources --format=json
+```
+
+Live includes architecture, references and diagnostics in one locale. Analysis adds graph data, source inventory and Doctor evidence, and includes both Core locales. Capabilities lists the supported profiles and schema versions without analyzing the application. The source-inventory command collects evidence statically without evaluating architecture rules. For independent status fields, exit codes and schemas, see the [Core Data v1 reference](core-data/README.md).
 
 ## Output and exit codes
 
@@ -387,8 +400,7 @@ state and global analysis blockers stay visible.
 `-v` adds configuration, full classes/paths, activation evidence, Project states,
 separate relationship lists, concrete references and original findings/context.
 `--project` retains existing ownership/activation selection. The Core adapter supports
-this exact command before container compilation. Text only in 0.3.0; no `--format`
-or JSON mode. Exit codes remain 0 valid, 1 architecture violations,
+this exact command before container compilation. It produces text output. Exit codes remain 0 valid, 1 architecture violations,
 2 usage/selection failure or unavailable analysis. See
 [module inspection](module-inspection.md) for the User example, evidence labels,
 partial-evidence limits and native-container versus fresh-adapter snapshots.
@@ -396,7 +408,7 @@ partial-evidence limits and native-container versus fresh-adapter snapshots.
 ## Architecture graph
 
 `php bin/console sillbeam:graph` writes `architecture.svg` in the current working
-directory and confirms the full path. SVG is generated directly in PHP without
+directory and confirms the full path. The Graph 2.0 SVG layout is generated directly in PHP without
 Graphviz or other extra tools. `--format=svg` is explicit;
 `--output=PATH` creates missing directories recursively and `--force` permits replacing
 an existing regular file. Failed rendering leaves existing artifacts untouched.
@@ -433,5 +445,5 @@ installation check; its JSON output does not run architecture analysis.
 The Core Console adapter resolves all five exact diagnostic names before container
 boot. Native Symfony Console requires a compilable container and may use a compiled
 report snapshot. None of these command additions places parser/architecture analysis
-on the production HTTP path. See [upgrade guidance](../migration/0.3.0.md) and the
+on the production HTTP path. See [v0.4.0 upgrade guidance](../migration/0.4.0.md) and the
 [initial acceptance evidence (2026-10-29)](https://github.com/WebSign-Dev/sillbeam-core/blob/3f891afbff43a0ab48af4ec5991f19aa59fe80b0/docs/development/release-0.3.0-acceptance/README.md).

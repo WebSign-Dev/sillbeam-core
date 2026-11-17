@@ -2,6 +2,25 @@
 
 This changelog records the version history of Sillbeam Core.
 
+## v0.4.0
+
+### Public additions
+
+- Add Core Data v1 through the PHP API and the Core Console adapter. Live exports architecture, diagnostics and references in one locale. Analysis adds structured graph data, source inventory, Doctor checks, both locales and an architecture fingerprint when the evidence is reliable. Capabilities and standalone source inventory have their own commands.
+- Add English and German CLI presentation, the project setting `sillbeam.locale` and the personal `sillbeam:locale` preference. Machine-readable commands retain their documented locale behavior and exit codes.
+- Ship Graph 2.0 for native SVG output with deterministic dependency layers, scope bands and orthogonal routes. Keep raw Mermaid export and the existing graph command options.
+
+### Lifecycle and reliability
+
+- Keep Symfony maintenance and Composer cache scripts usable when Core finds invalid architecture. Defer automatic Core services, routes and Doctrine mappings in that state. Require a successful explicit architecture check before serving a production release.
+- Make missing required discovery roots and changed, previously inspected descriptors explicit analysis failures. Keep automatic discovery and integration within the selected source boundaries. Report runtime activation as unknown when Analysis detects changing inputs and omit free descriptor exception text from Core Data.
+
+### Internal changes and maintenance
+
+- Reuse parser work and source-tree walks, persist static parse results by source content and parser inputs, and bound the snapshot read budget. Compact debug cache resources while retaining Symfony freshness checks. Warm non-debug HTTP continues to consume the compiled state.
+- Update the development and reference-application lockfiles with patched Symfony versions. Keep the dependency constraints and legacy Architecture and Doctor JSON v1 schemas.
+- Prepare the `0.4.x-dev` aliases for the current development line. See the [release notes](docs/releases/0.4.0.md) and [upgrade guide](docs/migration/0.4.0.md) for verification scope and rollout steps.
+
 ## v0.3.0 (release candidate)
 
 - Document public contracts and relevant implementation decisions with English PHPDoc; add development-only phpDocumentor 3, `composer docs:build`, contributor conventions and ignored generated output.

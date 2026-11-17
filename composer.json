@@ -70,8 +70,9 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-main": "0.3.x-dev",
-            "dev-dev": "0.3.x-dev",
+            "dev-main": "0.4.x-dev",
+            "dev-dev": "0.4.x-dev",
+            "dev-dev-v0.4.x": "0.4.x-dev",
             "dev-dev-v0.3.x": "0.3.x-dev"
         }
     },

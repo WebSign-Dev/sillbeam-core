@@ -1,8 +1,8 @@
 # Core Data v1
 
-[API contract](API_CONTRACT.md) · [JSON Schemas](schemas/) · [Contract examples](examples/)
+[API contract](API_CONTRACT.md) · [Contract examples](examples/)
 
-The four Draft 2020-12 schemas retain their published IDs. The examples are fixtures for the contract. Validate them offline from the repository root with `python3 tools/test-core-data-schemas.py` and Python's `jsonschema` and `referencing` packages.
+The four Draft 2020-12 schemas are [Live v1](schemas/core-data-live.v1.schema.json), [Analysis v1](schemas/core-data-analysis.v1.schema.json), [capabilities v1](schemas/core-data-capabilities.v1.schema.json) and [common v1 definitions](schemas/core-data-common.v1.schema.json). The common definitions include standalone source inventory. The examples are fixtures for the contract. Validate them offline from the repository root with `python3 tools/test-core-data-schemas.py` and Python's `jsonschema` and `referencing` packages.
 
 ## PHP access
 
@@ -86,11 +86,11 @@ Caller-supplied descriptions remain verbatim. Core Data uses localized technical
 
 ## Performance
 
-Live does not create an inventory, collect Doctor checks, hash source files, or build a graph projection. Analysis extends the same architecture index with symbol types and file evidence. Its consistency check rereads file hashes and directory listings, while the standalone inventory skips architecture rule evaluation. These paths run on explicit API or inventory requests. Normal container compilation and cache clearing use the existing build path.
+Live collects the shared architecture, reference and diagnostic data. Analysis also collects inventory, Doctor and structured graph evidence, and its consistency pass rereads file hashes and directory listings. The standalone inventory scans without evaluating architecture rules. Both profiles can use the [persistent source index](../architecture-analysis.md#source-index-and-cache-invalidation), which validates static parse entries against hashes of the inputs it reads. Container builds run the architecture checks without collecting the Analysis projection.
 
-Local acceptance measurements used PHP 8.5.4 and Symfony 8.1.6. The fixture contained two Projects, two private modules, and 8, 35, or 100 shared modules with 12 service files each, plus application PHP files and text assets. Each case ran once in a fresh PHP process followed by three repeated calls in the same process. Warm figures are medians. The source index remains local to each API run. The v0.3.0 baseline used the tagged Core source with the same dependency installation and fixture generator.
+The following historical Core Data measurements were taken before the persistent index was added, on PHP 8.5.4 and Symfony 8.1.6. The fixture contained two Projects, two private modules, and 8, 35, or 100 shared modules with 12 service files each, plus application PHP files and text assets. Each case ran once in a fresh PHP process followed by three repeated calls in the same process. Warm figures are medians. The v0.3.0 baseline used tagged Core source with the same dependency installation and fixture generator. See the [v0.4.0 release notes](../../releases/0.4.0.md) for the later Symfony lifecycle measurements.
 
-| Shared modules | v0.3.0 Architecture JSON | Current Architecture JSON | Live | Analysis | Source inventory |
+| Shared modules | v0.3.0 Architecture JSON | Pre-index candidate Architecture JSON | Live | Analysis | Source inventory |
 |---:|---:|---:|---:|---:|---:|
 | 8 | 153 / 49 ms | 157 / 47 ms | 162 / 50 ms | 175 / 58 ms | 163 / 52 ms |
 | 35 | 297 / 191 ms | 299 / 190 ms | 314 / 195 ms | 347 / 228 ms | 374 / 218 ms |
