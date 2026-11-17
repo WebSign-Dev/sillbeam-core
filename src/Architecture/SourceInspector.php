@@ -44,13 +44,15 @@ final class SourceInspector
         $paths = [];
         $pruned = [];
         $parser = new SourceFileParser();
-        foreach ($options->roots() as $root) {
-            if (!is_dir($root->path)) {
+        $roots = $options->roots();
+        $unvisitedRoots = null === $this->inventory ? array_fill_keys(array_column($roots, 'path'), true) : [];
+        foreach ($roots as $root) {
+            if ((null === $this->inventory && !isset($unvisitedRoots[$root->path])) || !is_dir($root->path)) {
                 continue;
             }
             // An overlapping root must not reenter a directory pruned by another scan.
             $boundary = $root->path;
-            foreach ($options->roots() as $candidate) {
+            foreach ($roots as $candidate) {
                 if ($candidate->contains($root->path) && \strlen($candidate->path) < \strlen($boundary)) {
                     $boundary = $candidate->path;
                 }
@@ -67,6 +69,7 @@ final class SourceInspector
             if (null !== $this->inventory && \array_key_exists($root->path, $this->inventory->directories)) {
                 continue;
             }
+            unset($unvisitedRoots[$root->path]);
             $this->inventory?->directory($root->path);
             if (null !== $this->inventory && null === $this->inventory->directories[$root->path]) {
                 continue;
@@ -74,7 +77,7 @@ final class SourceInspector
             $inventory = $this->inventory;
             $iterator = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(
                 new \RecursiveDirectoryIterator($root->path, \FilesystemIterator::SKIP_DOTS),
-                function (\SplFileInfo $file) use ($options, &$pruned, $inventory): bool {
+                function (\SplFileInfo $file) use ($options, &$pruned, $inventory, &$unvisitedRoots): bool {
                     $path = FilesystemPath::normalize($file->getPathname());
                     if (!$options->excluded($path)) {
                         // Directory and file aliases are not independent source identities.
@@ -102,6 +105,12 @@ final class SourceInspector
                             return false;
                         }
 
+                        // The recursive walk covers a nested root reached without crossing a link or exclusion.
+                        if (isset($unvisitedRoots[$path]) && $file->isDir()) {
+                            $visited = str_replace(\DIRECTORY_SEPARATOR, '/', $file->getPathname());
+                            unset($unvisitedRoots[$visited]);
+                        }
+
                         return true;
                     }
                     $pruned[FilesystemPath::normalize($file->getPathname())] = FilesystemPath::normalize($file->getPathname()).($file->isDir() ? '/' : '');
@@ -111,13 +120,13 @@ final class SourceInspector
             ));
             foreach ($iterator as $entry) {
                 $path = FilesystemPath::normalize($entry->getPathname());
-                if ($entry->isFile()) {
-                    $this->inventory?->file($path);
-                }
-                if (!$entry->isFile() || ('php' !== $entry->getExtension() && (null === $this->inventory || 'php' !== strtolower($entry->getExtension()))) || isset($paths[$path])) {
+                if (!$entry->isFile()) {
                     continue;
                 }
-                $paths[FilesystemPath::normalize($entry->getPathname())] = true;
+                $this->inventory?->file($path);
+                if ('php' === $entry->getExtension() || (null !== $this->inventory && 'php' === strtolower($entry->getExtension()))) {
+                    $paths[$path] = true;
+                }
             }
         }
         // Enumerate before parsing so fatal diagnostics also ignore filesystem/root order.
@@ -242,16 +251,20 @@ final class SourceInspector
             return $directories;
         }
         $excludedRoots = array_map(FilesystemPath::normalize(...), $excludedRoots);
-        $excluded = static function (\SplFileInfo $entry) use ($excludedRoots, $options): bool {
+        $acceptDirectory = static function (\SplFileInfo $entry) use ($excludedRoots, $options): bool {
+            if (!$entry->isDir()) {
+                return false;
+            }
+            $path = FilesystemPath::normalize($entry->getPathname());
             foreach ($excludedRoots as $excludedRoot) {
-                if (FilesystemPath::normalize($entry->getPathname()) === $excludedRoot || str_starts_with(FilesystemPath::normalize($entry->getPathname()), FilesystemPath::directoryPrefix($excludedRoot))) {
+                if ($path === $excludedRoot || str_starts_with($path, FilesystemPath::directoryPrefix($excludedRoot))) {
                     return false;
                 }
             }
 
-            return null === $options || !$options->excluded(FilesystemPath::normalize($entry->getPathname()));
+            return null === $options || !$options->excluded($path);
         };
-        $iterator = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS), $excluded), \RecursiveIteratorIterator::SELF_FIRST);
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS), $acceptDirectory), \RecursiveIteratorIterator::SELF_FIRST);
         $prefixLength = \strlen(FilesystemPath::directoryPrefix($root));
         foreach ($iterator as $entry) {
             if (!$entry->isDir()) {

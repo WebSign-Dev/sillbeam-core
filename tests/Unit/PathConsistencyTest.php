@@ -87,6 +87,26 @@ final class PathConsistencyTest extends TestCase
         }
     }
 
+    public function testExplicitRootBelowADirectoryAliasIsStillScanned(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $root = $source->directory.'/src';
+            $source->write('packages/Shared/Module/Entry.php', '<?php namespace Shared; final class Entry {}');
+            $source->write('packages/Shared/Outside.php', '<?php namespace Shared; final class Outside {}');
+            if (!@symlink($source->directory.'/packages/Shared', $root.'/Shared')) {
+                self::markTestSkipped('Directory symlinks are unavailable.');
+            }
+            $inspector = new SourceInspector();
+            $options = new DiscoveryOptions($root, $source->namespace.'\\', [new DiscoveryRoot($root.'/Shared/Module', 'Shared\\')], []);
+
+            self::assertSame([$root.'/Shared/Module/Entry.php'], array_keys($inspector->files($options)));
+            self::assertSame([$root.'/Shared'], $inspector->excludedPaths($options));
+        } finally {
+            $source->remove();
+        }
+    }
+
     public function testMixedProjectRootFindsItsPrivateModuleAndCanonicalDescriptorPaths(): void
     {
         $source = new SourceWorkspace();
