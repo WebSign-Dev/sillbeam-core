@@ -29,7 +29,7 @@ final class PhpDocJsonExportTest extends TestCase
             $json = (string) file_get_contents($temp.'/build/docs/api/sillbeam-core.en.json');
             $data = $this->decode($json);
             self::assertSame('websign-dev/sillbeam-core', $data['package']);
-            self::assertSame('0.3.0', $data['version']);
+            self::assertSame('0.4.0', $data['version']);
             $ids = array_column($data['elements'], 'id');
             foreach (['\\Sillbeam\\Core\\Module\\ModuleRegistryInterface', '\\Sillbeam\\Core\\Module\\ModuleRegistryInterface::active()', '\\Sillbeam\\Core\\Architecture\\ArchitectureReport::toJson()'] as $id) {
                 self::assertContains($id, $ids);
