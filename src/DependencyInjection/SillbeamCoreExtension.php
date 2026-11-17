@@ -38,6 +38,9 @@ use Sillbeam\Core\Project\ProjectContextInterface;
 use Sillbeam\Core\Project\ProjectRegistry;
 use Sillbeam\Core\Project\ProjectRegistryInterface;
 use Sillbeam\Core\Routing\SillbeamRouteLoader;
+use Sillbeam\Core\Routing\SourceDirectoriesResource;
+use Sillbeam\Core\Routing\SourceFilesResource;
+use Symfony\Component\Config\Resource\ComposerResource;
 use Symfony\Component\Config\Resource\DirectoryResource;
 use Symfony\Component\Config\Resource\FileExistenceResource;
 use Symfony\Component\Config\Resource\FileResource;
@@ -131,9 +134,8 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         $this->analysis = null;
         $options = $this->options ?? throw new \LogicException('Missing discovery options.');
         $resources = $analysis->discovery->resources ?? array_column($options->roots(), 'path');
-        foreach ($resources as $resource) {
-            $container->addResource(is_dir($resource) ? new DirectoryResource($resource, '/\\.php$/') : (is_file($resource) ? new FileResource($resource) : new FileExistenceResource($resource)));
-        }
+        $debug = $container->hasParameter('kernel.debug') && true === $container->getParameter('kernel.debug');
+        $this->trackSourceResources($container, $resources, $debug);
         $projectDir = $container->getParameter('kernel.project_dir');
         if (!\is_string($projectDir)) {
             throw new \LogicException('kernel.project_dir must be a string.');
@@ -156,6 +158,7 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
             null === $architecture ? null : new Reference(ProjectRegistryInterface::class),
             $resources, null === $architecture ? [] : $this->controllerFiles($architecture),
             array_values(array_unique([...$this->configurationResources, $projectDir.'/config', $composer])),
+            $debug,
         ])->addTag('routing.loader', ['priority' => 100]);
         $container->register(UserLocaleStore::class)->setFactory([UserLocaleStore::class, 'fromEnvironment']);
         $container->register(LocaleResolver::class)->setFactory([LocaleResolver::class, 'forProject'])
@@ -183,6 +186,30 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
             return;
         }
         $this->loadRuntime($container, $architecture ?? throw new \LogicException('Sillbeam architecture was not compiled.'), $analysis);
+    }
+
+    /** @param list<string> $paths */
+    private function trackSourceResources(ContainerBuilder $container, array $paths, bool $debug): void
+    {
+        $resources = array_map(
+            static fn (string $path): DirectoryResource|FileResource|FileExistenceResource => is_dir($path)
+                ? new DirectoryResource($path, '/\\.php$/')
+                : (is_file($path) ? new FileResource($path) : new FileExistenceResource($path)),
+            $paths,
+        );
+        if ($debug && $container->isTrackingResources()) {
+            $vendors = array_map(FilesystemPath::directoryPrefix(...), (new ComposerResource())->getVendors());
+            // Keep vendor paths native so ContainerBuilder still substitutes installed.json.
+            $outsideVendor = static function (DirectoryResource|FileResource $resource) use ($vendors): bool {
+                $path = FilesystemPath::directoryPrefix($resource->getResource());
+
+                return !array_any($vendors, static fn (string $vendor): bool => str_starts_with($path, $vendor));
+            };
+            $resources = SourceFilesResource::compact(SourceDirectoriesResource::compact($resources, $outsideVendor), $outsideVendor);
+        }
+        foreach ($resources as $resource) {
+            $container->addResource($resource);
+        }
     }
 
     private function loadRuntime(ContainerBuilder $container, CompiledArchitecture $architecture, ArchitectureAnalysisResult $analysis): void

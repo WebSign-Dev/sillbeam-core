@@ -38,6 +38,7 @@ final class SillbeamRouteLoader extends Loader
         private readonly array $resources = [],
         private readonly array $controllerFiles = [],
         private readonly array $configurationResources = [],
+        private readonly bool $compactSourceResources = false,
     ) {
         parent::__construct();
     }
@@ -57,8 +58,12 @@ final class SillbeamRouteLoader extends Loader
         $this->loaded = true;
         $routes = new RouteCollection();
         $this->addArchitectureRoutes($routes);
-        foreach ($this->resources as $path) {
-            $routes->addResource(is_dir($path) ? new DirectoryResource($path, '/\\.php$/') : (is_file($path) ? new FileResource($path) : new FileExistenceResource($path)));
+        $resources = $this->sourceResources($routes);
+        if ($this->compactSourceResources) {
+            $resources = SourceFilesResource::compact(SourceDirectoriesResource::compact(iterator_to_array($resources, false)));
+        }
+        foreach ($resources as $resource) {
+            $routes->addResource($resource);
         }
 
         foreach ($this->configurationResources as $path) {
@@ -71,6 +76,25 @@ final class SillbeamRouteLoader extends Loader
     public function supports(mixed $resource, ?string $type = null): bool
     {
         return 'sillbeam' === $type;
+    }
+
+    /** @return \Generator<int, DirectoryResource|FileResource|FileExistenceResource> */
+    private function sourceResources(RouteCollection $routes): \Generator
+    {
+        $knownFiles = [];
+        if ($this->compactSourceResources) {
+            foreach ($routes->getResources() as $resource) {
+                if ($resource instanceof FileResource) {
+                    $knownFiles[$resource->getResource()] = true;
+                }
+            }
+        }
+        foreach ($this->resources as $path) {
+            $resource = is_dir($path) ? new DirectoryResource($path, '/\\.php$/') : (is_file($path) ? new FileResource($path) : new FileExistenceResource($path));
+            if (!$resource instanceof FileResource || !isset($knownFiles[$resource->getResource()])) {
+                yield $resource;
+            }
+        }
     }
 
     private function addArchitectureRoutes(RouteCollection $routes): void

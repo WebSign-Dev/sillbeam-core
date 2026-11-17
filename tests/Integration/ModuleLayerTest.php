@@ -327,13 +327,20 @@ final class ModuleLayerTest extends TestCase
         $this->kernel->boot();
         $router = $this->kernel->getContainer()->get('router');
         self::assertInstanceOf(\Symfony\Component\Routing\RouterInterface::class, $router);
-        $resources = array_filter($router->getRouteCollection()->getResources(), static fn ($resource): bool => $resource instanceof \Symfony\Component\Config\Resource\DirectoryResource || $resource instanceof \Symfony\Component\Config\Resource\FileResource || $resource instanceof \Symfony\Component\Config\Resource\FileExistenceResource);
+        $cache = new \Symfony\Component\Config\ConfigCache($this->source->directory.'/route-freshness.php', true);
+        $cache->write('<?php return true;', $router->getRouteCollection()->getResources());
         $timestamp = time() + 10;
         foreach (['config/packages/sillbeam.yaml', 'config/routes.yaml', 'composer.json', 'src/Module/Hello/HelloModule.php', 'src/Module/Hello/Controller/Endpoint.php'] as $file) {
             $path = $this->source->directory.'/'.$file;
-            touch($path, $timestamp + 1);
+            touch($cache->getPath(), ++$timestamp);
             clearstatcache();
-            self::assertNotEmpty(array_filter($resources, static fn ($resource): bool => !$resource->isFresh($timestamp)), $file.' must invalidate the route cache.');
+            self::assertTrue($cache->isFresh(), 'The route cache must be fresh before editing '.$file.'.');
+
+            touch($path, $timestamp + 2);
+            touch($cache->getPath(), ++$timestamp);
+            clearstatcache();
+            self::assertFalse($cache->isFresh(), $file.' must invalidate the route cache.');
+
             touch($path, $timestamp - 1);
             clearstatcache();
         }
