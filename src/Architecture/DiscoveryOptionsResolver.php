@@ -36,6 +36,7 @@ final class DiscoveryOptionsResolver
 
         $moduleRootsConfigured = \array_key_exists('modules', $raw);
         $projectRootsConfigured = \array_key_exists('projects', $raw);
+        $applicationRootConfigured = \array_key_exists('root', $raw);
         $raw = $processedConfig['discovery'] ?? $raw;
 
         $projectDir = $container->getParameter('kernel.project_dir');
@@ -80,6 +81,7 @@ final class DiscoveryOptionsResolver
             $integrations['entities'] ?? ['Entity', '**/Entity'],
             $integrations['services']['exclude'] ?? ['Entity/**', '**/Entity/**', 'Dto/**', '**/Dto/**', 'Tests/**', '**/Tests/**', 'Fixtures/**', '**/Fixtures/**', 'Migrations/**', '**/Migrations/**'],
             $this->applicationRoots($projectDir),
+            requireApplicationRoot: $applicationRootConfigured,
         );
     }
 

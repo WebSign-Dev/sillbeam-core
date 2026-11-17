@@ -15,6 +15,8 @@ The public namespace is `Sillbeam\Core\Api`.
 
 Use application-resolved discovery options and configuration. The same provider supplies both profiles.
 
+An explicitly configured discovery root is required for a valid architecture result. After editing a descriptor that Core already inspected in the same PHP process, rerun the analysis in a fresh process so PHP loads the new class definition.
+
 ```php
 use Sillbeam\Core\Api\CoreDataConfiguration;
 use Sillbeam\Core\Api\CoreDataJsonSerializer;
@@ -80,7 +82,7 @@ Fingerprint v2 is SHA-256 over a canonical JSON object containing the architectu
 
 Use one translator instance per output locale and export. If a key has no entry for that translator's locale, the English entry is used and `fallbacks()` records one `resource_key`, `locale` and `source_locale` tuple per key. A key missing from English is a programming error. There is no implicit locale normalization or regional matching. The public request rejects unsupported locale values before any collection.
 
-Original finding messages and caller-supplied descriptions remain verbatim. The Analysis Doctor projection uses a localized technical message for unstructured exception text. The legacy Architecture and Doctor JSON v1 outputs use their existing English technical text and structure. Diagnostic presentation and Doctor inspection can use an explicit translator. Existing CLI invocations keep their default language.
+Caller-supplied descriptions remain verbatim. Core Data uses localized technical messages for free exception text from descriptor attribute instantiation and from Analysis Doctor checks. The legacy Architecture and Doctor JSON v1 outputs use their existing English technical text and structure. Diagnostic presentation and Doctor inspection can use an explicit translator. Existing CLI invocations keep their default language.
 
 ## Performance
 

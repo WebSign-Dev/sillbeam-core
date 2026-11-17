@@ -99,6 +99,10 @@ final class CoreDataAssembler
                     }
                 }
                 $errors[] = $this->error('export.input_changed', 'export', null, 'api.export.input_changed');
+                if (null !== $result->architecture) {
+                    $modules = array_map($this->withoutActivation(...), $modules);
+                    $projects = array_map(static fn (CoreDataObject $project): CoreDataObject => new CoreDataObject([...$project->fields, 'modules' => null]), $projects);
+                }
             }
             $graphComplete = 'complete' === $completeness['architecture'] && 'complete' === $completeness['references'];
             $graphState = null !== $result->architecture && $complete && $graphComplete ? 'validated'
@@ -152,6 +156,20 @@ final class CoreDataAssembler
             $inventory,
             $doctor,
         );
+    }
+
+    private function withoutActivation(CoreDataObject $module): CoreDataObject
+    {
+        /** @var list<CoreDataObject> $states */
+        $states = $module->fields['project_states'];
+
+        return new CoreDataObject([
+            ...$module->fields,
+            'active' => null,
+            'inactive_reason' => 'unknown',
+            'activation_reasons' => null,
+            'project_states' => array_map(static fn (CoreDataObject $state): CoreDataObject => new CoreDataObject([...$state->fields, 'state' => 'unknown']), $states),
+        ]);
     }
 
     /** @param list<array<string, mixed>> $rows

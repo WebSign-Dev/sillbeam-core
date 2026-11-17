@@ -29,15 +29,16 @@ final readonly class DiscoveryOptions
     /**
      * Normalizes roots and rejects conflicting namespaces for the same path.
      *
-     * @param list<DiscoveryRoot>|null $moduleRoots        explicit module roots; null selects the application root plus /Module, an empty list disables shared-module roots
-     * @param list<DiscoveryRoot>|null $projectRoots       explicit Project roots; null selects the application root plus /Project, an empty list disables Project roots
-     * @param list<string>             $excludes           global absolute or application-root-relative glob-like exclusion patterns
-     * @param list<string>             $controllerPatterns area-relative patterns used to discover controller directories
-     * @param list<string>             $entityPatterns     area-relative patterns used to discover entity directories
-     * @param list<DiscoveryRoot>      $applicationRoots   additional Composer namespace/path mappings for reference classification, not recursive scanning
-     * @param list<string>             $serviceExcludes    area-relative patterns excluded from automatic service registration
-     * @param string                   $root               application source root
-     * @param string                   $namespace          PSR-4 namespace prefix for the application source root
+     * @param list<DiscoveryRoot>|null $moduleRoots            explicit module roots; null selects the application root plus /Module, an empty list disables shared-module roots
+     * @param list<DiscoveryRoot>|null $projectRoots           explicit Project roots; null selects the application root plus /Project, an empty list disables Project roots
+     * @param list<string>             $excludes               global absolute or application-root-relative glob-like exclusion patterns
+     * @param list<string>             $controllerPatterns     area-relative patterns used to discover controller directories
+     * @param list<string>             $entityPatterns         area-relative patterns used to discover entity directories
+     * @param list<DiscoveryRoot>      $applicationRoots       additional Composer namespace/path mappings for reference classification, not recursive scanning
+     * @param list<string>             $serviceExcludes        area-relative patterns excluded from automatic service registration
+     * @param string                   $root                   application source root
+     * @param string                   $namespace              PSR-4 namespace prefix for the application source root
+     * @param bool                     $requireApplicationRoot whether architecture requires the application source root
      *
      * @throws \LogicException if the same discovery path has conflicting namespace mappings
      */
@@ -51,11 +52,12 @@ final readonly class DiscoveryOptions
         public array $entityPatterns = ['Entity', '**/Entity'],
         public array $serviceExcludes = ['Entity/**', '**/Entity/**', 'Dto/**', '**/Dto/**', 'Tests/**', '**/Tests/**', 'Fixtures/**', '**/Fixtures/**', 'Migrations/**', '**/Migrations/**'],
         public array $applicationRoots = [],
+        private bool $requireApplicationRoot = true,
     ) {
         $root = $this->root = FilesystemPath::normalize($root);
         $this->moduleRoots = $moduleRoots ?? [new DiscoveryRoot(FilesystemPath::directoryPrefix($root).'Module', $namespace.'Module\\')];
         $this->projectRoots = $projectRoots ?? [new DiscoveryRoot(FilesystemPath::directoryPrefix($root).'Project', $namespace.'Project\\')];
-        $this->requiredRoots = array_fill_keys([$root, ...array_column($moduleRoots ?? [], 'path'), ...array_column($projectRoots ?? [], 'path')], true);
+        $this->requiredRoots = array_fill_keys([...array_column($moduleRoots ?? [], 'path'), ...array_column($projectRoots ?? [], 'path')], true);
         $namespaces = [];
         foreach ($this->roots() as $discoveryRoot) {
             if (isset($namespaces[$discoveryRoot->path]) && $namespaces[$discoveryRoot->path] !== $discoveryRoot->namespace) {
@@ -81,6 +83,12 @@ final readonly class DiscoveryOptions
     public function requiresRoot(string $path): bool
     {
         return $path === $this->root || isset($this->requiredRoots[$path]);
+    }
+
+    /** @internal Symfony's implicit application root may be absent in a Symfony-only application. */
+    public function requiresArchitectureRoot(string $path): bool
+    {
+        return ($this->requireApplicationRoot && $path === $this->root) || isset($this->requiredRoots[$path]);
     }
 
     /**

@@ -48,6 +48,16 @@ final readonly class ArchitectureFinding
         return ($this->resource ?? null)?->render($translator) ?? $this->message;
     }
 
+    /** @internal Omits free application exception text from Core Data documents. */
+    public function forExport(): self
+    {
+        if ('finding.discovery.descriptor_metadata.read' !== $this->resource?->key) {
+            return $this;
+        }
+
+        return self::fromMessage($this->rule, new CoreMessage('diagnosis.discovery.descriptor_metadata.problem'), $this->context, $this->severity);
+    }
+
     /** @internal */
     public function withSortedContext(): self
     {

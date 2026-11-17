@@ -213,6 +213,28 @@ final class CoreAnalysisApiTest extends TestCase
             $files = $inventory['data']->fields['files'];
             self::assertIsArray($files);
             self::assertCount(1, $files);
+            $document = $provider->collect(CoreDataRequest::fromProfile('live'));
+            self::assertSame('unavailable', $document->analysis->fields['status']);
+        } finally {
+            $source->remove();
+        }
+    }
+
+    public function testMissingConfiguredRootCannotValidateEitherProfile(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $source->write('config/packages/sillbeam.yaml', 'sillbeam: { discovery: { root: missing, namespace: '.$source->namespace.' } }');
+            foreach (['live', 'analysis'] as $profile) {
+                [$exit, $data] = $this->runCommand($source, ['command' => 'sillbeam:api', '--profile' => $profile]);
+                self::assertSame(2, $exit);
+                self::assertSame('unavailable', $data['analysis']['status']);
+                self::assertSame('source.read', $data['diagnostics']['findings'][0]['rule']);
+                self::assertNull($data['metadata']['architecture_fingerprint']);
+                if ('analysis' === $profile) {
+                    self::assertSame('unavailable', $data['graph']['validation_state']);
+                }
+            }
         } finally {
             $source->remove();
         }
@@ -319,7 +341,8 @@ final class CoreAnalysisApiTest extends TestCase
         $source = new SourceWorkspace();
         try {
             $source->write('src/marker.txt', 'before');
-            $source->php('src/Module/A/AModule.php', 'file_put_contents(dirname(__DIR__, 2)."/marker.txt", "after"); #[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a")] final class AModule {}');
+            $module = $source->php('src/Module/A/AModule.php', 'file_put_contents(dirname(__DIR__, 2)."/marker.txt", "after"); #[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a")] final class AModule {}');
+            $source->php('src/Project/Shop/ShopProject.php', '#[\Sillbeam\Core\Project\Attribute\SillbeamProject(id: "shop", modules: [\\'.$module.'::class])] final class ShopProject {}');
             [$code, $data] = $this->snapshot($source);
             self::assertSame(3, $code);
             self::assertSame('valid', $data['analysis']['status']);
@@ -327,6 +350,50 @@ final class CoreAnalysisApiTest extends TestCase
             self::assertSame('evidence_only', $data['graph']['validation_state']);
             self::assertNull($data['metadata']['architecture_fingerprint']);
             self::assertContains('export.input_changed', array_column($data['errors'], 'code'));
+            self::assertNull($data['architecture']['modules'][0]['active']);
+            self::assertNull($data['architecture']['modules'][0]['activation_reasons']);
+            self::assertSame('unknown', $data['architecture']['modules'][0]['project_states'][0]['state']);
+            self::assertNull($data['architecture']['projects'][0]['modules']);
+        } finally {
+            $source->remove();
+        }
+    }
+
+    public function testChangedLoadedDescriptorCannotValidateAgainInTheSameProcess(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $path = 'src/Module/A/AModule.php';
+            $source->php($path, '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a")] final class AModule {}');
+            [$initialExit, $initial] = $this->snapshot($source);
+            self::assertSame(0, $initialExit);
+            self::assertSame('validated', $initial['graph']['validation_state']);
+
+            $source->php($path, '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a", dependencies: [\Example\MissingModule::class])] final class AModule {}');
+            foreach (['live', 'analysis'] as $profile) {
+                [$exit, $data] = $this->runCommand($source, ['command' => 'sillbeam:api', '--profile' => $profile]);
+                self::assertSame(2, $exit);
+                self::assertSame('unavailable', $data['analysis']['status']);
+                self::assertSame('discovery.descriptor_metadata', $data['diagnostics']['findings'][0]['rule']);
+                self::assertNull($data['metadata']['architecture_fingerprint']);
+            }
+        } finally {
+            $source->remove();
+        }
+    }
+
+    public function testDescriptorExceptionTextIsOmittedFromBothProfiles(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $source->php('src/ExampleValue.php', 'final class ExampleValue { public function __construct() { throw new \InvalidArgumentException("fixture-error-marker"); } }');
+            $source->php('src/Module/A/AModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a", description: new \\'.$source->namespace.'\\ExampleValue())] final class AModule {}');
+            foreach (['live', 'analysis'] as $profile) {
+                [$exit, $data] = $this->runCommand($source, ['command' => 'sillbeam:api', '--profile' => $profile]);
+                self::assertSame(2, $exit);
+                self::assertSame('discovery.descriptor_metadata', $data['diagnostics']['findings'][0]['rule']);
+                self::assertStringNotContainsString('fixture-error-marker', json_encode($data, \JSON_THROW_ON_ERROR));
+            }
         } finally {
             $source->remove();
         }
@@ -375,6 +442,40 @@ final class CoreAnalysisApiTest extends TestCase
         } finally {
             $source->remove();
             $external->remove();
+        }
+    }
+
+    public function testConventionalModuleRootDoesNotReenterAnExcludedLink(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $source->write('packages/demo/Sample.php', '<?php final class Sample {}');
+            symlink($source->directory.'/packages/demo', $source->directory.'/src/Module');
+            [$exit, $data] = $this->snapshot($source);
+            self::assertSame(3, $exit);
+            self::assertSame(['src/Module'], $data['source_inventory']['excluded_paths']);
+            self::assertSame(['src'], array_column($data['source_inventory']['roots'], 'path'));
+            self::assertSame([], $data['source_inventory']['files']);
+            self::assertSame('inventory.link', $data['errors'][0]['code']);
+        } finally {
+            $source->remove();
+        }
+    }
+
+    public function testLinkedAreaDirectoriesAreNotAdvertisedAsAutomaticIntegrations(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $source->php('src/Module/A/AModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "a")] final class AModule {}');
+            $source->write('packages/demo/Sample.php', '<?php final class Sample {}');
+            symlink($source->directory.'/packages/demo', $source->directory.'/src/Module/A/Entity');
+            symlink($source->directory.'/packages/demo', $source->directory.'/src/Module/A/Controller');
+            [$exit, $data] = $this->snapshot($source);
+            self::assertSame(3, $exit);
+            self::assertSame([], $data['architecture']['modules'][0]['entities']);
+            self::assertSame([], $data['architecture']['modules'][0]['controllers']);
+        } finally {
+            $source->remove();
         }
     }
 

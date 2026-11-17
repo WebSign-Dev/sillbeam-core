@@ -17,6 +17,9 @@ use Sillbeam\Core\I18n\CoreMessage;
  */
 final class SourceInspector
 {
+    /** @var array<class-string, string> Digest observed when the process first inspected each loaded descriptor. */
+    private static array $loadedDescriptorDigests = [];
+
     /** @var array<string, array<string, SourceFile>> */
     private array $indexes = [];
 
@@ -43,11 +46,12 @@ final class SourceInspector
         $files = [];
         $paths = [];
         $pruned = [];
+        $failures = new ArchitectureFindings();
         $parser = new SourceFileParser();
         $roots = $options->roots();
         $unvisitedRoots = null === $this->inventory ? array_fill_keys(array_column($roots, 'path'), true) : [];
         foreach ($roots as $root) {
-            if ((null === $this->inventory && !isset($unvisitedRoots[$root->path])) || !is_dir($root->path)) {
+            if (null === $this->inventory && !isset($unvisitedRoots[$root->path])) {
                 continue;
             }
             // An overlapping root must not reenter a directory pruned by another scan.
@@ -65,6 +69,15 @@ final class SourceInspector
                 if ($path === $boundary) {
                     break;
                 }
+            }
+            if (!is_dir($root->path)) {
+                if (!$this->inventoryOnly && $options->requiresArchitectureRoot($root->path)) {
+                    $failures->add(ArchitectureFinding::fromMessage('source.read', new CoreMessage('error.discovery.missing_directory', ['path' => $root->path]), ['file' => $root->path], 'fatal'));
+                }
+                continue;
+            }
+            if (!$options->requiresRoot($root->path) && is_link($root->path)) {
+                continue;
             }
             if (null !== $this->inventory && \array_key_exists($root->path, $this->inventory->directories)) {
                 continue;
@@ -85,10 +98,13 @@ final class SourceInspector
                             $pruned[$path] = $path;
                             if (null !== $inventory) {
                                 $target = realpath($path);
-                                if (false === $target || !array_any($options->roots(), static function (DiscoveryRoot $root) use ($target): bool {
+                                if (false === $target || !array_any($options->roots(), static function (DiscoveryRoot $root) use ($target, $options): bool {
+                                    if (!$options->requiresRoot($root->path) && is_link($root->path)) {
+                                        return false;
+                                    }
                                     $resolved = realpath($root->path);
 
-                                    return false !== $resolved && str_starts_with(FilesystemPath::normalize($target), FilesystemPath::directoryPrefix($resolved));
+                                    return false !== $resolved && (new DiscoveryRoot($resolved, ''))->contains($target);
                                 })) {
                                     $inventory->failures[$path] = 'inventory.link';
                                 }
@@ -131,7 +147,6 @@ final class SourceInspector
         }
         // Enumerate before parsing so fatal diagnostics also ignore filesystem/root order.
         ksort($paths);
-        $failures = new ArchitectureFindings();
         $cause = null;
         foreach ($this->inventory->directories ?? [] as $directory => $digest) {
             if (null === $digest && !$this->inventoryOnly && $this->requiresSource($options, $directory)) {
@@ -252,7 +267,7 @@ final class SourceInspector
         }
         $excludedRoots = array_map(FilesystemPath::normalize(...), $excludedRoots);
         $acceptDirectory = static function (\SplFileInfo $entry) use ($excludedRoots, $options): bool {
-            if (!$entry->isDir()) {
+            if ($entry->isLink() || !$entry->isDir()) {
                 return false;
             }
             $path = FilesystemPath::normalize($entry->getPathname());
@@ -333,6 +348,13 @@ final class SourceInspector
     public function reflection(string $class, string $file): \ReflectionClass
     {
         $file = FilesystemPath::normalize($file);
+        $digest = $this->inventory?->files[$file]['hash'] ?? @hash_file('sha256', $file);
+        if (false === $digest) {
+            throw ArchitectureValidationException::fatalMessage('source.read', new CoreMessage('finding.source.read', ['path' => $file]), ['file' => $file]);
+        }
+        if ((self::$loadedDescriptorDigests[$class] ?? $digest) !== $digest) {
+            throw ArchitectureValidationException::fatalMessage('discovery.descriptor_metadata', new CoreMessage('finding.discovery.descriptor_metadata.changed', ['class' => $class]), ['file' => $file, 'class' => $class]);
+        }
         if (!class_exists($class)) {
             require_once $file;
         }
@@ -340,6 +362,7 @@ final class SourceInspector
         if (FilesystemPath::normalize((string) $reflection->getFileName()) !== $file) {
             throw ArchitectureValidationException::fatalMessage('discovery.descriptor_file', new CoreMessage('finding.discovery.descriptor_file', ['class' => $class, 'path' => $file]), ['file' => $file, 'class' => $class]);
         }
+        self::$loadedDescriptorDigests[$class] = $digest;
 
         return $reflection;
     }

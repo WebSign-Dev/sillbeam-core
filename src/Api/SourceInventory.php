@@ -28,6 +28,9 @@ final readonly class SourceInventory
         }
         $architectureRoots = [...($options->moduleRoots ?? []), ...($options->projectRoots ?? [])];
         foreach ($options?->roots() ?? [] as $root) {
+            if (null !== $options && !$options->requiresRoot($root->path) && is_link($root->path)) {
+                continue;
+            }
             if (!is_dir($root->path)) {
                 if (null !== $options && $options->requiresRoot($root->path) && !$options->excluded($root->path)) {
                     $errors[] = ['code' => 'inventory.root_missing', 'path' => null];

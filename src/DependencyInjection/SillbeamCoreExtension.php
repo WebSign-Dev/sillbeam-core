@@ -170,11 +170,14 @@ final class SillbeamCoreExtension extends Extension implements PrependExtensionI
         $container->register(ArchitectureCommand::class)->setArguments([new Reference(ArchitectureReport::class)])->addMethodCall('useLocaleResolver', [new Reference(LocaleResolver::class)])->setAutoconfigured(true);
         $container->register(ReportCommand::class)->setArguments([new Reference(ArchitectureReport::class), $projectDir])->addMethodCall('useLocaleResolver', [new Reference(LocaleResolver::class)])->setAutoconfigured(true);
         $rootDefinition = static fn (DiscoveryRoot $root): Definition => new Definition(DiscoveryRoot::class, [$root->path, $root->namespace, $root->excludes]);
+        // The constructor uses null to reconstruct optional conventional roots.
+        $rootDefinitions = static fn (array $roots): ?array => [] !== $roots && !$options->requiresRoot($roots[0]->path) ? null : array_map($rootDefinition, $roots);
         $container->register(DiscoveryOptions::class)->setArguments([
             $options->root, $options->namespace,
-            array_map($rootDefinition, $options->moduleRoots), array_map($rootDefinition, $options->projectRoots),
+            $rootDefinitions($options->moduleRoots), $rootDefinitions($options->projectRoots),
             $options->excludes, $options->controllerPatterns, $options->entityPatterns, $options->serviceExcludes,
             array_map($rootDefinition, $options->applicationRoots),
+            $options->requiresArchitectureRoot($options->root),
         ]);
         $container->register(DescriptorCreator::class)->setArguments([new Reference(DiscoveryOptions::class)]);
         foreach ([MakeModuleCommand::class, MakeProjectCommand::class] as $command) {

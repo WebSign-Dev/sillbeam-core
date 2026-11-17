@@ -131,6 +131,39 @@ WORKER;
         }
     }
 
+    public function testAnOldSnapshotCannotExhaustTheMemoryBudgetOfASmallScan(): void
+    {
+        $source = new SourceWorkspace();
+        try {
+            $source->php('src/Remaining.php', 'final class Remaining {}');
+            $body = 'final class Generated { public function sample(): void {'.str_repeat('\Example\Reference::class;', 1000).'} }';
+            for ($file = 0; $file < 90; ++$file) {
+                $source->php('src/Generated/File'.$file.'.php', $body);
+            }
+            $options = new DiscoveryOptions($source->directory.'/src', $source->namespace.'\\');
+            $persistent = new PersistentSourceIndex($source->directory);
+            self::assertCount(91, (new SourceInspector(persistent: $persistent))->files($options));
+            self::assertCount(1, glob($source->directory.'/var/sillbeam/source-index/*.json') ?: []);
+            (new \Symfony\Component\Filesystem\Filesystem())->remove($source->directory.'/src/Generated');
+
+            $code = <<<'WORKER'
+require $argv[1];
+$options = new \Sillbeam\Core\Architecture\DiscoveryOptions($argv[2].'/src', $argv[3].'\\');
+$index = new \Sillbeam\Core\Architecture\PersistentSourceIndex($argv[2]);
+echo count((new \Sillbeam\Core\Architecture\SourceInspector(persistent: $index))->files($options));
+WORKER;
+            $process = proc_open([\PHP_BINARY, '-d', 'memory_limit=32M', '-r', $code, \dirname(__DIR__, 2).'/vendor/autoload.php', $source->directory, $source->namespace], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+            self::assertIsResource($process);
+            [$stdout, $stderr] = [stream_get_contents($pipes[1]), stream_get_contents($pipes[2])];
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            self::assertSame(0, proc_close($process), (string) $stderr);
+            self::assertSame('1', $stdout);
+        } finally {
+            $source->remove();
+        }
+    }
+
     public function testConcurrentProcessesPublishCompleteSnapshots(): void
     {
         $source = new SourceWorkspace();

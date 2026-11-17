@@ -9,6 +9,7 @@ use Sillbeam\Core\Architecture\ArchitectureFinding;
 use Sillbeam\Core\Architecture\Console\ArchitecturePresentation;
 use Sillbeam\Core\Architecture\Diagnostic\Diagnosis;
 use Sillbeam\Core\Architecture\Diagnostic\DiagnosticCollection;
+use Sillbeam\Core\Architecture\Diagnostic\DiagnosticContext;
 use Sillbeam\Core\I18n\CoreTranslator;
 
 /** @internal Projects existing diagnostic groups and their original evidence. */
@@ -24,7 +25,11 @@ final readonly class LiveDiagnostics
     /** @return array{findings: list<CoreDataObject>, diagnoses: list<CoreDataObject>} */
     public function project(ArchitectureAnalysisResult $analysis): array
     {
-        $collection = DiagnosticCollection::fromAnalysis($analysis, $this->translator);
+        $collection = DiagnosticCollection::fromContext(
+            array_map(static fn (ArchitectureFinding $finding): ArchitectureFinding => $finding->forExport(), $analysis->findings),
+            DiagnosticContext::fromAnalysis($analysis),
+            $this->translator,
+        );
         $findings = [];
         foreach ($collection->findings as $index => $finding) {
             $findings[] = new CoreDataObject([

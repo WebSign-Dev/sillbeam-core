@@ -88,6 +88,8 @@ PHP);
             $this->source->php('src/Module/B/BModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(dependencies: [\\'.$namespace.'\Module\A\AModule::class])] final class BModule {}');
         } elseif ('metadata' === $scenario) {
             $this->source->php('src/Module/Broken/BrokenModule.php', '#[\Sillbeam\Core\Module\Attribute\SillbeamModule(id: "%invalid-id%")] final class BrokenModule {}');
+        } elseif ('root' === $scenario) {
+            $this->source->write('config/packages/sillbeam.yaml', 'sillbeam: { discovery: { root: missing, namespace: '.$this->source->namespace.' } }');
         } else {
             $this->source->write('src/Module/Broken/Broken.php', '<?php class {');
         }
@@ -127,6 +129,7 @@ PHP);
         yield 'missing dependency' => ['dependency', 'dependency.unknown', 1];
         yield 'cycle' => ['cycle', 'dependency.cycle', 1];
         yield 'invalid descriptor metadata' => ['metadata', 'discovery.descriptor_metadata', 2];
+        yield 'missing configured source root' => ['root', 'source.read', 2];
         yield 'syntax error' => ['syntax', 'source.parse', 2];
     }
 

@@ -81,7 +81,7 @@ The JSON Schemas govern the response. Domain objects reject unknown fields unles
 | `architecture.modules[].active` | Activation supported by evidence. Use `null` when the runtime graph is invalid or incomplete |
 | `architecture.modules[].enabled` | Availability in configuration, independent of whether the module is `active` |
 | `architecture.projects[].modules` | Compiled membership or `null` when unknown |
-| `diagnostics.findings[].message` | Original English technical Core message retained for traceability |
+| `diagnostics.findings[].message` | English technical Core message. Free exception text from descriptor attribute instantiation is omitted |
 | `diagnostics.findings[].context` | Unchanged original parameters, which may contain historical absolute paths |
 | `diagnostics.findings[].location` | Separately verified relative, POSIX-normalized, one-based file position, or `null` when it cannot be verified |
 | `diagnostics.diagnoses[].id` | Run-local ID such as `D1` or `D2`, with no historical identity |

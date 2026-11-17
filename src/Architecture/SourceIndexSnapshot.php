@@ -22,9 +22,16 @@ final class SourceIndexSnapshot
             return;
         }
 
+        $memoryLimit = ini_parse_quantity((string) \ini_get('memory_limit'));
+        // The decoded PHP arrays and temporary JSON strings cost much more than the file.
+        $readableBytes = $memoryLimit > 0 ? min($maxBytes, intdiv(max(0, $memoryLimit - memory_get_usage(true)), 32)) : $maxBytes;
+        $size = @filesize($file);
+        if ($readableBytes < 67 || false === $size || $size > $readableBytes) {
+            return;
+        }
         try {
-            $bytes = @file_get_contents($file, length: $maxBytes + 1);
-            if (false === $bytes || \strlen($bytes) > $maxBytes || "\n" !== ($bytes[64] ?? null)) {
+            $bytes = @file_get_contents($file, length: $readableBytes + 1);
+            if (false === $bytes || \strlen($bytes) > $readableBytes || "\n" !== ($bytes[64] ?? null)) {
                 return;
             }
             $payload = substr($bytes, 65);
